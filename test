@@ -1,0 +1,6 @@
+LET V 5 # This is a comment!
+P "Hey!"
+# This is also a comment!
+P 123
+P V + 5
+P 1 + 3 + V + 1
