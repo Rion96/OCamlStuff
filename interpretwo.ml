@@ -18,77 +18,47 @@ module Interpreter = struct
 
   exception InvalidToken
 
-  let higher_order (op : token) (stack_op : token) = (
-    let order = [UNOP_MINUS; NEWLINE;
-                 MULT; DIV; MOD; NEWLINE;
-                 PLUS; MINUS; NEWLINE;
-                 LESS; LEQ; GREATER; GEQ; NEWLINE;
-                 NEQ; EQ; NEWLINE;
-                 AND; OR; NEWLINE] in
-    let rec loop (input : token list) (level : int) (op : token) = (
-      match input with
-      | NEWLINE :: input -> loop input (level + 1) op
-      | hd :: tl when hd = op -> level
-      | hd :: tl -> loop tl level op
-      | [] -> raise InvalidToken
-    ) in
-    let op, stack_op = loop order 0 op, loop order 0 stack_op in
-    if op < stack_op then true else false
-  )
-
   let interpreter (tokens : token list) = (
     let rec rpn (input : token list) (stack : token list) (output : token list) = (
       let rec precedence (op : token) (stack : token list) (output : token list) = (
+        let higher_order (op : token) (stack_op : token) = (
+          let order = [UNOP_MINUS; NEWLINE;
+                       MULT; DIV; MOD; NEWLINE;
+                       PLUS; MINUS; NEWLINE;
+                       LESS; LEQ; GREATER; GEQ; NEWLINE;
+                       NEQ; EQ; NEWLINE;
+                       AND; NEWLINE;
+                       OR; NEWLINE;
+                       LET; PRINT] in
+          let rec loop (input : token list) (level : int) (op : token) = (
+            match input with
+            | NEWLINE :: input -> loop input (level + 1) op
+            | hd :: tl when hd = op -> level
+            | hd :: tl -> loop tl level op
+            | [] -> raise InvalidToken
+          ) in
+          let op, stack_op = loop order 0 op, loop order 0 stack_op in
+          if op < stack_op then true else false
+        ) in
         match stack with
         | [] ->
           [op], output
         | stack_op :: tl -> (
           match op, stack_op with
+          (* Special cases with parentheses *)
           | END, START ->
             tl, output
-          | UNOP_MINUS, LET
-          | UNOP_MINUS, START
-          | UNOP_MINUS, PRINT
-          | UNOP_MINUS, MULT
-          | UNOP_MINUS, DIV
-          | UNOP_MINUS, PLUS
-          | UNOP_MINUS, MINUS
-          | UNOP_MINUS, MOD
-          | MULT, LET
-          | MULT, START
-          | MULT, PRINT
-          | MULT, PLUS
-          | MULT, MINUS
-          | DIV, PLUS
-          | DIV, MINUS
-          | DIV, LET
-          | DIV, START
-          | DIV, PRINT
-          | MOD, PLUS
-          | MOD, MINUS
-          | MOD, LET
-          | MOD, START
-          | MOD, PRINT
-          | PLUS, LET
-          | PLUS, START
-          | PLUS, PRINT
-          | MINUS, LET
-          | MINUS, START
-          | MINUS, PRINT
-          | START, _ ->
-            (op :: stack), output
-          | MULT, _
-          | DIV, _
-          | END, _
-          | PRINT, _
-          | PLUS, _
-          | MINUS, _
-          | UNOP_MINUS, _
-          | MOD, _
-          | LET, _ ->
+          | END, _ ->
             precedence op tl (stack_op :: output)
-          | _ -> (
-            raise InvalidToken
+          | START, _ 
+          | _, START ->
+            (op :: stack), output
+          | op, stack_op -> (
+            if higher_order op stack_op then (
+              (op :: stack), output
+            ) else (
+              precedence op tl (stack_op :: output)
+            )
           )
         )
       ) in
