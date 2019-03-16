@@ -7,11 +7,9 @@ module Interpreter = struct
     | NAME of string
     | INT of int
     | STR of string
-    | LET
-    | PRINT
-    | NEWLINE
-    | ERROR
-    | UNOP_MINUS
+    | LET | PRINT
+    | NEWLINE | ERROR
+    | UNOP_MINUS | NOT
     | PLUS | MINUS | MULT | DIV | MOD
     | START | END
     | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
@@ -22,7 +20,7 @@ module Interpreter = struct
     let rec rpn (input : token list) (stack : token list) (output : token list) = (
       let rec precedence (op : token) (stack : token list) (output : token list) = (
         let higher_order (op : token) (stack_op : token) = (
-          let order = [UNOP_MINUS; NEWLINE;
+          let order = [UNOP_MINUS; NOT; NEWLINE;
                        MULT; DIV; MOD; NEWLINE;
                        PLUS; MINUS; NEWLINE;
                        LESS; LEQ; GREATER; GEQ; NEWLINE;
@@ -34,8 +32,8 @@ module Interpreter = struct
             match input with
             | NEWLINE :: input -> loop input (level + 1) op
             | hd :: tl when hd = op -> level
-            | hd :: tl -> loop tl level op
-            | [] -> raise InvalidToken
+            | _ :: input -> loop input level op
+            | [] -> print_endline "precedence failure!"; raise InvalidToken
           ) in
           let op, stack_op = loop order 0 op, loop order 0 stack_op in
           if op < stack_op then true else false
@@ -196,6 +194,109 @@ module Interpreter = struct
             eval_rpn (MOD :: input) vars (b :: (List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
+        | LESS -> (
+          match stack with
+          | INT b :: INT a :: stack ->
+            let v = INT (if a < b then 1 else 0) in
+            eval_rpn input vars (v :: stack)
+          | NAME a :: stack ->
+            eval_rpn (LESS :: input) vars ((List.assoc a vars) :: stack)
+          | b :: NAME a :: stack ->
+            eval_rpn (LESS :: input) vars (b :: (List.assoc a vars) :: stack)
+          | _ -> raise InvalidToken
+        )
+        | GREATER -> (
+          match stack with
+          | INT b :: INT a :: stack ->
+            let v = INT (if a > b then 1 else 0) in
+            eval_rpn input vars (v :: stack)
+          | NAME a :: stack ->
+            eval_rpn (GREATER :: input) vars ((List.assoc a vars) :: stack)
+          | b :: NAME a :: stack ->
+            eval_rpn (GREATER :: input) vars (b :: (List.assoc a vars) :: stack)
+          | _ -> raise InvalidToken
+        )
+        | LEQ -> (
+          match stack with
+          | INT b :: INT a :: stack ->
+            let v = INT (if a <= b then 1 else 0) in
+            eval_rpn input vars (v :: stack)
+          | NAME a :: stack ->
+            eval_rpn (LEQ :: input) vars ((List.assoc a vars) :: stack)
+          | b :: NAME a :: stack ->
+            eval_rpn (LEQ :: input) vars (b :: (List.assoc a vars) :: stack)
+          | _ -> raise InvalidToken
+        )
+        | GEQ -> (
+          match stack with
+          | INT b :: INT a :: stack ->
+            let v = INT (if a >= b then 1 else 0) in
+            eval_rpn input vars (v :: stack)
+          | NAME a :: stack ->
+            eval_rpn (GEQ :: input) vars ((List.assoc a vars) :: stack)
+          | b :: NAME a :: stack ->
+            eval_rpn (GEQ :: input) vars (b :: (List.assoc a vars) :: stack)
+          | _ -> raise InvalidToken
+        )
+        | NEQ -> (
+          match stack with
+          | INT b :: INT a :: stack ->
+            let v = INT (if a <> b then 1 else 0) in
+            eval_rpn input vars (v :: stack)
+          | STR b :: STR a :: stack ->
+            let v = INT (if a <> b then 1 else 0) in
+            eval_rpn input vars (v :: stack)
+          | NAME a :: stack ->
+            eval_rpn (NEQ :: input) vars ((List.assoc a vars) :: stack)
+          | b :: NAME a :: stack ->
+            eval_rpn (NEQ :: input) vars (b :: (List.assoc a vars) :: stack)
+          | _ -> raise InvalidToken
+        )
+        | EQ -> (
+          match stack with
+          | INT b :: INT a :: stack ->
+            let v = INT (if a = b then 1 else 0) in
+            eval_rpn input vars (v :: stack)
+          | STR b :: STR a :: stack ->
+            let v = INT (if a = b then 1 else 0) in
+            eval_rpn input vars (v :: stack)
+          | NAME a :: stack ->
+            eval_rpn (EQ :: input) vars ((List.assoc a vars) :: stack)
+          | b :: NAME a :: stack ->
+            eval_rpn (EQ :: input) vars (b :: (List.assoc a vars) :: stack)
+          | _ -> raise InvalidToken
+        )
+        | AND -> (
+          match stack with
+          | INT b :: INT a :: stack ->
+            let v = INT (if b = 1 && a = 1 then 1 else 0) in
+            eval_rpn input vars (v :: stack)
+          | NAME a :: stack ->
+            eval_rpn (AND :: input) vars ((List.assoc a vars) :: stack)
+          | b :: NAME a :: stack ->
+            eval_rpn (AND :: input) vars (b :: (List.assoc a vars) :: stack)
+          | _ -> raise InvalidToken
+        )
+        | OR -> (
+          match stack with
+          | INT b :: INT a :: stack ->
+            let v = INT (if b = 1 || a = 1 then 1 else 0) in
+            eval_rpn input vars (v :: stack)
+          | NAME a :: stack ->
+            eval_rpn (OR :: input) vars ((List.assoc a vars) :: stack)
+          | b :: NAME a :: stack ->
+            eval_rpn (OR :: input) vars (b :: (List.assoc a vars) :: stack)
+          | _ -> raise InvalidToken
+        )
+        | NOT -> (
+          match stack with
+          | INT a :: stack ->
+            let v = INT (if a = 1 then 0 else 1) in
+            eval_rpn input vars (v :: stack)
+          | NAME a :: stack ->
+            eval_rpn (NOT :: input) vars ((List.assoc a vars) :: stack)
+          | _ -> raise InvalidToken
+        )
         | _ -> raise InvalidToken
       )
       | [] -> (
@@ -228,9 +329,9 @@ module Interpreter = struct
       )
     ) in
     if debug then (
-      debug_iter tokens [] []
+      debug_iter tokens [("TRUE", INT 1); ("FALSE", INT 0)] []
     ) else (
-      iterate tokens [];
+      iterate tokens [("TRUE", INT 1); ("FALSE", INT 0)];
       []
     )
   )
@@ -273,10 +374,14 @@ module Interpreter = struct
         ERROR, []
       )
     ) in
-    let rec name_token (buffer : string) = (
-      function
+    let rec name_token (buffer : string) (input : char list) = (
+      match input with
+      | '-' :: stack
+      | '+' :: stack
+      | '!' :: stack
+      | '(' :: stack
       | ' ' :: stack -> (
-        NAME buffer, stack
+        NAME buffer, input
       )
       | hd :: tl when hd >= 'A' && hd <= 'Z' -> (
         name_token ((String.make 1 hd) ^ buffer) tl
@@ -309,6 +414,24 @@ module Interpreter = struct
         main_parser (DIV :: buffer) stack
       | '%' :: stack ->
         main_parser (MOD :: buffer) stack
+      | '!' :: stack ->
+        main_parser (NOT :: buffer) stack
+      | '|' :: '|' :: stack ->
+        main_parser (OR :: buffer) stack
+      | '&' :: '&' :: stack ->
+        main_parser (AND :: buffer) stack
+      | '=' :: '>' :: stack ->
+        main_parser (GEQ :: buffer) stack
+      | '=' :: '<' :: stack ->
+        main_parser (NEQ :: buffer) stack
+      | '=' :: '!' :: stack ->
+        main_parser (NEQ :: buffer) stack
+      | '=' :: stack ->
+        main_parser (EQ :: buffer) stack
+      | '<' :: stack ->
+        main_parser (LESS :: buffer) stack
+      | '>' :: stack ->
+        main_parser (GREATER :: buffer) stack
       | '#' :: stack ->
         main_parser (ignore_token buffer) stack
       | ' ' :: stack ->
