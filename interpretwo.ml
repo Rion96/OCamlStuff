@@ -11,15 +11,30 @@ module Interpreter = struct
     | PRINT
     | NEWLINE
     | ERROR
-    | PLUS
-    | MINUS
     | UNOP_MINUS
-    | MULT
-    | DIV
-    | START
-    | END
+    | PLUS | MINUS | MULT | DIV | MOD
+    | START | END
+    | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
 
   exception InvalidToken
+
+  let higher_order (op : token) (stack_op : token) = (
+    let order = [UNOP_MINUS; NEWLINE;
+                 MULT; DIV; MOD; NEWLINE;
+                 PLUS; MINUS; NEWLINE;
+                 LESS; LEQ; GREATER; GEQ; NEWLINE;
+                 NEQ; EQ; NEWLINE;
+                 AND; OR; NEWLINE] in
+    let rec loop (input : token list) (level : int) (op : token) = (
+      match input with
+      | NEWLINE :: input -> loop input (level + 1) op
+      | hd :: tl when hd = op -> level
+      | hd :: tl -> loop tl level op
+      | [] -> raise InvalidToken
+    ) in
+    let op, stack_op = loop order 0 op, loop order 0 stack_op in
+    if op < stack_op then true else false
+  )
 
   let interpreter (tokens : token list) = (
     let rec rpn (input : token list) (stack : token list) (output : token list) = (
@@ -31,6 +46,14 @@ module Interpreter = struct
           match op, stack_op with
           | END, START ->
             tl, output
+          | UNOP_MINUS, LET
+          | UNOP_MINUS, START
+          | UNOP_MINUS, PRINT
+          | UNOP_MINUS, MULT
+          | UNOP_MINUS, DIV
+          | UNOP_MINUS, PLUS
+          | UNOP_MINUS, MINUS
+          | UNOP_MINUS, MOD
           | MULT, LET
           | MULT, START
           | MULT, PRINT
@@ -41,17 +64,17 @@ module Interpreter = struct
           | DIV, LET
           | DIV, START
           | DIV, PRINT
+          | MOD, PLUS
+          | MOD, MINUS
+          | MOD, LET
+          | MOD, START
+          | MOD, PRINT
           | PLUS, LET
           | PLUS, START
           | PLUS, PRINT
           | MINUS, LET
           | MINUS, START
           | MINUS, PRINT
-          | UNOP_MINUS, LET
-          | UNOP_MINUS, START
-          | UNOP_MINUS, PRINT
-          | UNOP_MINUS, MULT
-          | UNOP_MINUS, DIV
           | START, _ ->
             (op :: stack), output
           | MULT, _
@@ -61,6 +84,7 @@ module Interpreter = struct
           | PLUS, _
           | MINUS, _
           | UNOP_MINUS, _
+          | MOD, _
           | LET, _ ->
             precedence op tl (stack_op :: output)
           | _ -> (
@@ -192,6 +216,16 @@ module Interpreter = struct
           )
           | _ -> raise InvalidToken
         )
+        | MOD -> (
+          match stack with
+          | INT b :: INT a :: stack ->
+            eval_rpn input vars ((INT (a mod b)) :: stack)
+          | NAME a :: stack ->
+            eval_rpn (MOD :: input) vars ((List.assoc a vars) :: stack)
+          | b :: NAME a :: stack ->
+            eval_rpn (MOD :: input) vars (b :: (List.assoc a vars) :: stack)
+          | _ -> raise InvalidToken
+        )
         | _ -> raise InvalidToken
       )
       | [] -> (
@@ -286,58 +320,44 @@ module Interpreter = struct
     ) in
     let rec main_parser (buffer : token list) = (
       function
-      | '\n' :: stack -> (
+      | '\n' :: stack ->
         main_parser (NEWLINE :: buffer) stack
-      )
-      | ')' :: stack -> (
+      | ')' :: stack ->
         main_parser (END :: buffer) stack
-      )
       | '(' :: stack
-      | '+' :: '(' :: stack -> (
+      | '+' :: '(' :: stack ->
         main_parser (START :: buffer) stack
-      )
-      | '-' :: '(' :: stack -> (
+      | '-' :: '(' :: stack ->
         main_parser (START :: UNOP_MINUS :: buffer) stack
-      )
-      | '-' :: stack -> (
+      | '-' :: stack ->
         main_parser (MINUS :: buffer) stack
-      )
-      | '+' :: stack -> (
+      | '+' :: stack ->
         main_parser (PLUS :: buffer) stack
-      )
-      | '*' :: stack -> (
+      | '*' :: stack ->
         main_parser (MULT :: buffer) stack
-      )
-      | '/' :: stack -> (
+      | '/' :: stack ->
         main_parser (DIV :: buffer) stack
-      )
-      | '#' :: stack -> (
+      | '%' :: stack ->
+        main_parser (MOD :: buffer) stack
+      | '#' :: stack ->
         main_parser (ignore_token buffer) stack
-      )
-      | ' ' :: stack -> (
+      | ' ' :: stack ->
         main_parser buffer stack
-      )
-      | '"' :: stack -> (
+      | '"' :: stack ->
         let tok, stack = str_token "" stack in
         main_parser (tok :: buffer) stack
-      )
-      | 'P' :: tl -> (
+      | 'P' :: tl ->
         main_parser (PRINT :: buffer) tl
-      )
-      | 'T' :: 'E' :: 'L' :: tl -> (
+      | 'T' :: 'E' :: 'L' :: tl ->
         main_parser (LET :: buffer) tl
-      )
-      | c :: stack when c >= '0' && c <= '9' -> (
+      | c :: stack when c >= '0' && c <= '9' ->
         let tok, stack = int_token "" (c :: stack) in
         main_parser (tok :: buffer) stack
-      )
-      | c :: stack -> (
+      | c :: stack ->
         let tok, stack = name_token "" (c :: stack) in
         main_parser (tok :: buffer) stack
-      )
-      | [] -> (
+      | [] ->
         buffer
-      )
     ) in
     main_parser [] stack
   )

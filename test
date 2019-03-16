@@ -11,3 +11,4 @@ LET X (-2) * (-1)
 LET Y 14
 P Y / X
 P "Hello " + W
+P 5 % 2
