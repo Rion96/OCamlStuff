@@ -250,7 +250,11 @@ module Interpreter = struct
         int_token ((String.make 1 hd) ^ buffer) tl
       )
       | stack -> (
-        INT (int_of_string buffer), stack
+        try (
+          INT (int_of_string buffer), stack
+        ) with exn -> (
+          ERROR, stack
+        )
       )
     ) in
     let rec str_token (buffer : string) = (

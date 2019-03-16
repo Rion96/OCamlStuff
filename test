@@ -1,4 +1,5 @@
 LET V 5 # This is a comment!
+LET W "World!"
 P "Hey!"
 # This is also a comment!
 P 123
@@ -9,3 +10,4 @@ P 2 * (1 + 2)
 LET X (-2) * (-1)
 LET Y 14
 P Y / X
+P "Hello " + W
