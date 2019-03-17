@@ -5,11 +5,11 @@ module Interpreter = struct
     | INT of int
     | BOOL of bool
     | STR of string
-    | LET | PRINT | IF | ELSE | ENDIF | WHILE | ENDWHILE
+    | LET | PRINT | IF | ELSE | ENDIF | WHILE | ENDWHILE | ARR
     | NEWLINE | ERROR
     | UNOP_MINUS | NOT
     | PLUS | MINUS | MULT | DIV | MOD
-    | START | END
+    | START | END | BR_START | BR_END
     | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
 
   exception InvalidToken
@@ -18,7 +18,8 @@ module Interpreter = struct
     let rec rpn (input : token list) (stack : token list) (output : token list) = (
       let rec precedence (op : token) (stack : token list) (output : token list) = (
         let higher_order (op : token) (stack_op : token) = (
-          let order = [UNOP_MINUS; NOT; NEWLINE;
+          let order = [ARR; NEWLINE;
+                       UNOP_MINUS; NOT; NEWLINE;
                        MULT; DIV; MOD; NEWLINE;
                        PLUS; MINUS; NEWLINE;
                        LESS; LEQ; GREATER; GEQ; NEWLINE;
@@ -41,12 +42,17 @@ module Interpreter = struct
           [op], output
         | stack_op :: tl -> (
           match op, stack_op with
-          (* Special cases with parentheses *)
+          (* Special cases with parentheses and brackets *)
+          | BR_END, BR_START ->
+            tl, (ARR :: output)
           | END, START ->
             tl, output
+          | BR_END, _
           | END, _ ->
             precedence op tl (stack_op :: output)
+          | BR_START, _
           | START, _ 
+          | _, BR_START
           | _, START ->
             (op :: stack), output
           | op, stack_op -> (
@@ -266,6 +272,14 @@ module Interpreter = struct
             eval_rpn input vars (v :: stack)
           | _ -> raise InvalidToken
         )
+        | ARR -> (
+          let stack = dref stack 1 in
+          match stack with
+          | INT i :: NAME n :: stack ->
+            let arr = "ARR_" ^ n ^ "_" ^ (string_of_int i) in
+            eval_rpn input vars ((NAME arr) :: stack)
+          | _ -> raise InvalidToken
+        )
         | _ -> raise InvalidToken
       )
       | [] -> (
@@ -425,6 +439,7 @@ module Interpreter = struct
       | '+' :: stack
       | '!' :: stack
       | '(' :: stack
+      | '[' :: stack
       | ' ' :: stack -> (
         NAME buffer, input
       )
@@ -443,6 +458,10 @@ module Interpreter = struct
       | ';' :: stack
       | '\n' :: stack ->
         main_parser (NEWLINE :: buffer) stack
+      | ']' :: stack ->
+        main_parser (BR_END :: buffer) stack
+      | '[' :: stack ->
+        main_parser (BR_START :: buffer) stack
       | ')' :: stack ->
         main_parser (END :: buffer) stack
       | '(' :: stack
