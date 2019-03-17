@@ -107,6 +107,7 @@ module Interpreter = struct
       | op :: input -> (
         match op with
         | LET -> (
+          let stack = dref stack 1 in
           match stack with
           | v :: NAME n :: stack -> (
             eval_rpn input ((n, v) :: (List.remove_assoc n vars)) stack
@@ -485,7 +486,8 @@ module Interpreter = struct
       | '"' :: stack ->
         let tok, stack = str_token "" stack in
         main_parser (tok :: buffer) stack
-      | 'P' :: tl ->
+      (* PRINT *)
+      | 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: tl ->
         main_parser (PRINT :: buffer) tl
       (* LET *)
       | 'T' :: 'E' :: 'L' :: tl ->
@@ -539,7 +541,13 @@ end
 open Interpreter
 
 let _ = (
-  open_in "test"
+  let file =
+  if Array.length Sys.argv > 1 then (
+    open_in Sys.argv.(1)
+  ) else (
+    open_in "test"
+  ) in
+  file
   |> char_stack
   |> tokenizer
   |> interpreter

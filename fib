@@ -1,0 +1,12 @@
+# For interpreter.ml
+# Prints Fibonacci numbers up to 1000
+
+LET A 0
+LET B 1
+
+WHILE A < 1000
+    PRINT A
+    LET TMP A + B
+    LET A B
+    LET B TMP
+ENDWHILE

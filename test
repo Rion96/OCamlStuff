@@ -3,40 +3,40 @@
 LET V 5 # This is a comment!
 LET W "World!"
 # This is also a comment!
-P 123
-P V + 5 - 1
-P 1 + 3 - 1 + V + 1
-P 1 + (-2)
-P 2 * (1 + 2)
+PRINT 123
+PRINT V + 5 - 1
+PRINT 1 + 3 - 1 + V + 1
+PRINT 1 + (-2)
+PRINT 2 * (1 + 2)
 LET X (-2) * (-1)
 LET Y 14
-P Y / X
-P "Hello " + W
-P 5 % 2
-P X < Y
-P !(TRUE) || !(43 < 2)
+PRINT Y / X
+PRINT "Hello " + W
+PRINT 5 % 2
+PRINT X < Y
+PRINT !(TRUE) || !(43 < 2)
 LET T TRUE
-P !T
+PRINT !T
 IF 1 + 1 = 2
-  P "Duh!"
+  PRINT "Duh!"
   LET ANS 1 + 1
-  P "1 + 1 is:"
-  P ANS
+  PRINT "1 + 1 is:"
+  PRINT ANS
   IF TRUE
-    P "Yup!"
+    PRINT "Yup!"
   ELSE
-    P "LOL"
+    PRINT "LOL"
   ENDIF
 ELSE
-  P "Wait... what?"
+  PRINT "Wait... what?"
   IF TRUE
-    P "Bla"
+    PRINT "Bla"
   ENDIF
 ENDIF
 
 LET X 1
 WHILE X <= 10
-  P "Looping..."
-  P X
+  PRINT "Looping..."
+  PRINT X
   LET X X + 1
 ENDWHILE
