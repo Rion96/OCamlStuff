@@ -1,6 +1,7 @@
+# Test script for interpreter.ml
+
 LET V 5 # This is a comment!
 LET W "World!"
-P "Hey!"
 # This is also a comment!
 P 123
 P V + 5 - 1
@@ -16,3 +17,26 @@ P X < Y
 P !(TRUE) || !(43 < 2)
 LET T TRUE
 P !T
+IF 1 + 1 = 2
+  P "Duh!"
+  LET ANS 1 + 1
+  P "1 + 1 is:"
+  P ANS
+  IF TRUE
+    P "Yup!"
+  ELSE
+    P "LOL"
+  ENDIF
+ELSE
+  P "Wait... what?"
+  IF TRUE
+    P "Bla"
+  ENDIF
+ENDIF
+
+LET X 1
+WHILE X <= 10
+  P "Looping..."
+  P X
+  LET X X + 1
+ENDWHILE

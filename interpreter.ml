@@ -1,14 +1,11 @@
-(* A nicer interpreter. In my opinion. *)
 module Interpreter = struct
-
-  let debug = false
 
   type token =
     | NAME of string
     | INT of int
     | BOOL of bool
     | STR of string
-    | LET | PRINT
+    | LET | PRINT | IF | ELSE | ENDIF | WHILE | ENDWHILE
     | NEWLINE | ERROR
     | UNOP_MINUS | NOT
     | PLUS | MINUS | MULT | DIV | MOD
@@ -274,37 +271,113 @@ module Interpreter = struct
         vars
       )
     ) in
+    let strip_if (stack : token list) = (
+      let rec loop (stack : token list) (cnt : int) = (
+        if cnt > 0 then (
+          match stack with
+          | IF :: stack -> loop stack (cnt + 1)
+          | ELSE :: stack when cnt = 1 -> stack
+          | ENDIF :: stack -> loop stack (cnt - 1)
+          | _ :: stack -> loop stack cnt
+          | [] -> []
+        ) else (
+          stack
+        )
+      ) in
+      loop stack 1
+    ) in
+    let strip_else (stack : token list) = (
+      let rec loop (stack : token list) (buffer : token list) (cnt : int) = (
+        if cnt > 0 then (
+          match stack with
+          | IF :: tl -> loop tl buffer (cnt + 1)
+          | ENDIF :: tl -> loop tl buffer (cnt - 1)
+          | _ :: tl -> loop tl buffer cnt
+          | [] -> []
+        ) else (
+          match buffer with
+          | hd :: tl -> loop (hd :: stack) tl cnt
+          | [] -> stack
+        )
+      ) in
+      let rec store_if (input : token list) (buffer : token list) (cnt : int) = (
+        if cnt > 0 then (
+          match input with
+          | IF :: tl -> store_if tl (IF :: buffer) (cnt + 1)
+          | ELSE :: tl when cnt = 1 -> loop tl buffer 1
+          | ENDIF :: tl -> store_if tl (ENDIF :: buffer) (cnt - 1)
+          | hd :: tl -> store_if tl (hd :: buffer) cnt
+          | [] -> []
+        ) else (
+          stack
+        )
+      ) in
+      store_if stack [] 1
+    ) in
+    let rec strip_while (stack : token list) (cnt : int) = (
+      match stack with
+      | WHILE :: tl -> strip_while tl (cnt + 1)
+      | ENDWHILE :: tl when cnt = 1 -> tl
+      | ENDWHILE :: tl -> strip_while tl (cnt - 1)
+      | hd :: tl -> strip_while tl cnt
+      | [] -> []
+    ) in
+    let copy_while (stack : token list) = (
+      let rec back (stack : token list) (buffer : token list)= (
+        match buffer with
+        | hd :: tl -> back (hd :: stack) tl
+        | [] -> stack
+      ) in
+      let rec create_buffer (stack : token list) (buffer : token list) (cnt : int) = (
+        match stack with
+        | WHILE :: tl -> create_buffer tl (WHILE :: buffer) (cnt + 1)
+        | ENDWHILE :: tl when cnt = 1 -> buffer
+        | ENDWHILE :: tl -> create_buffer tl (ENDWHILE :: buffer) (cnt - 1)
+        | hd :: tl -> create_buffer tl (hd :: buffer) cnt
+        | [] -> buffer
+      ) in
+      let rec store_while (stack : token list) (buffer : token list) = (
+        match stack with
+        | NEWLINE :: tl -> (
+          let stmts = create_buffer tl [] 1 in
+          let fst_stmts = List.append (NEWLINE :: buffer) stmts in
+          back tl fst_stmts
+        )
+        | hd :: tl -> store_while tl (hd :: buffer)
+        | [] -> []
+      ) in
+      store_while stack []
+    ) in
     let rec iterate (input : token list) (vars : (string * token) list) = (
       match input with
       | [] -> ()
       | NEWLINE :: input -> iterate input vars
+      | IF :: input -> (
+        let expr, input = rpn (LET :: NAME "_EVAL_" :: input) [] [] in
+        let vars = eval_rpn expr vars [] in
+        match List.assoc "_EVAL_" vars with
+        | BOOL true -> iterate (strip_else input) vars
+        | BOOL false -> iterate (strip_if input) vars
+        | _ -> raise InvalidToken
+      )
+      | WHILE :: tl -> (
+        let expr, tl = rpn (LET :: NAME "_EVAL_" :: tl) [] [] in
+        let vars = eval_rpn expr vars [] in
+        match List.assoc "_EVAL_" vars with
+        | BOOL true -> iterate (copy_while input) vars
+        | BOOL false -> iterate (strip_while tl 1) vars
+        | _ -> raise InvalidToken
+      )
+      | ENDWHILE :: input
+      | ENDIF :: input ->
+        iterate input (List.remove_assoc "_EVAL_" vars)
       | _ -> (
         let expr, input = rpn input [] [] in
         let vars = eval_rpn expr vars [] in
         iterate input vars
       )
     ) in
-    let rec debug_iter (input : token list) (vars : (string * token) list) (output : token list) = (
-      match input with
-      | [] -> output
-      | NEWLINE :: input -> debug_iter input vars output
-      | _ -> (
-        let expr, input = rpn input [] [] in
-        try (
-          let vars = eval_rpn expr vars [] in
-          debug_iter input vars (List.append output expr)
-        ) with InvalidToken -> (
-          print_endline "Failed!";
-          List.append output expr
-        )
-      )
-    ) in
-    if debug then (
-      debug_iter tokens [] []
-    ) else (
-      iterate tokens [];
-      []
-    )
+    iterate tokens []
   )
 
   let tokenizer (stack : char list) = (
@@ -406,6 +479,7 @@ module Interpreter = struct
         main_parser (GREATER :: buffer) stack
       | '#' :: stack ->
         main_parser (ignore_token buffer) stack
+      | '\t' :: stack
       | ' ' :: stack ->
         main_parser buffer stack
       | '"' :: stack ->
@@ -413,12 +487,30 @@ module Interpreter = struct
         main_parser (tok :: buffer) stack
       | 'P' :: tl ->
         main_parser (PRINT :: buffer) tl
+      (* LET *)
       | 'T' :: 'E' :: 'L' :: tl ->
         main_parser (LET :: buffer) tl
+      (* TRUE *)
       | 'E' :: 'U' :: 'R' :: 'T' :: tl ->
         main_parser (BOOL true :: buffer) tl
+      (* FALSE *)
       | 'E' :: 'S' :: 'L' :: 'A' :: 'F' :: tl ->
         main_parser (BOOL false :: buffer) tl
+      (* ENDIF *)
+      | 'F' :: 'I' :: 'D' :: 'N' :: 'E' :: tl ->
+        main_parser (ENDIF :: buffer) tl
+      (* IF *)
+      | 'F' :: 'I' :: tl ->
+        main_parser (IF :: buffer) tl
+      (* ELSE *)
+      | 'E' :: 'S' :: 'L' :: 'E' :: tl ->
+        main_parser (ELSE :: buffer) tl
+      (* ENDWHILE *)
+      | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: 'D' :: 'N' :: 'E' :: tl ->
+        main_parser (ENDWHILE :: buffer) tl
+      (* WHILE *)
+      | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: tl ->
+        main_parser (WHILE :: buffer) tl 
       | c :: stack when c >= '0' && c <= '9' ->
         let tok, stack = int_token "" (c :: stack) in
         main_parser (tok :: buffer) stack
