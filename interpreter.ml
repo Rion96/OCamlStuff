@@ -79,6 +79,28 @@ module Interpreter = struct
         rpn tl stack output
     ) in
     let rec eval_rpn (input : token list) (vars : (string * token) list) (stack : token list) = (
+      let dref (stack : token list) (n : int) = (
+        let rec loop (stack : token list) (buffer : token list) (index : int) = (
+          if index < n then (
+            match stack with
+            | NAME a :: stack -> (
+              let elem = List.assoc a vars in
+              loop stack (elem :: buffer) (index + 1)
+            )
+            | _ :: tl -> (
+              let elem = List.hd stack in
+              loop tl (elem :: buffer) (index + 1)
+            )
+            | _ -> raise InvalidToken
+          ) else (
+            match buffer with
+            | hd :: tl ->
+              loop (hd :: stack) tl index
+            | [] -> stack
+          )
+        ) in
+        loop stack [] 0
+      ) in
       match input with
       | NAME _ :: tl
       | STR _ :: tl
@@ -95,11 +117,8 @@ module Interpreter = struct
           | _ -> raise InvalidToken
         )
         | PRINT -> (
+          let stack = dref stack 1 in
           match stack with
-          | NAME a :: stack -> (
-            let v = List.assoc a vars in
-            eval_rpn (PRINT :: input) vars (v :: stack)
-          )
           | STR a :: stack -> (
             print_endline a;
             eval_rpn input vars stack
@@ -120,6 +139,7 @@ module Interpreter = struct
           | _ -> raise InvalidToken
         )
         | PLUS -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack -> (
             eval_rpn input vars ((INT (a + b)) :: stack)
@@ -127,129 +147,83 @@ module Interpreter = struct
           | STR b :: STR a :: stack -> (
             eval_rpn input vars ((STR (a ^ b)) :: stack)
           )
-          | NAME a :: stack -> (
-            let v = List.assoc a vars in
-            eval_rpn (PLUS :: input) vars (v :: stack)
-          )
-          | b :: NAME a :: stack -> (
-            let v = List.assoc a vars in
-            eval_rpn (PLUS :: input) vars (b :: v :: stack)
-          )
           | _ -> raise InvalidToken
         )
         | MINUS -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack -> (
             eval_rpn input vars ((INT (a - b)) :: stack)
           )
-          | NAME a :: stack -> (
-            let v = List.assoc a vars in
-            eval_rpn (MINUS :: input) vars (v :: stack)
-          )
-          | b :: NAME a :: stack -> (
-            let v = List.assoc a vars in
-            eval_rpn (MINUS :: input) vars (b :: v :: stack)
-          )
           | _ -> raise InvalidToken
         )
         | UNOP_MINUS -> (
+          let stack = dref stack 1 in
           match stack with
           | INT a :: stack -> (
             eval_rpn input vars ((INT (-a)) :: stack)
           )
-          | NAME a :: stack -> (
-            let v = List.assoc a vars in
-            eval_rpn (UNOP_MINUS :: input) vars (v :: stack)
-          )
           | _ -> raise InvalidToken
         )
         | MULT -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack -> (
             eval_rpn input vars ((INT (a * b)) :: stack)
-          )
-          | NAME a :: stack -> (
-            let v = List.assoc a vars in
-            eval_rpn (MULT :: input) vars (v :: stack)
-          )
-          | b :: NAME a :: stack -> (
-            let v = List.assoc a vars in
-            eval_rpn (MULT :: input) vars (b :: v :: stack)
           )
           | _ -> (
             raise InvalidToken
           )
         )
         | DIV -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack -> (
             eval_rpn input vars ((INT (a / b)) :: stack)
           )
-          | NAME a :: stack -> (
-            let v = List.assoc a vars in
-            eval_rpn (DIV :: input) vars (v :: stack)
-          )
-          | b :: NAME a :: stack -> (
-            let v = List.assoc a vars in
-            eval_rpn (DIV :: input) vars (b :: v :: stack)
-          )
           | _ -> raise InvalidToken
         )
         | MOD -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack ->
             eval_rpn input vars ((INT (a mod b)) :: stack)
-          | NAME a :: stack ->
-            eval_rpn (MOD :: input) vars ((List.assoc a vars) :: stack)
-          | b :: NAME a :: stack ->
-            eval_rpn (MOD :: input) vars (b :: (List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
         | LESS -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack ->
             let v = BOOL (a < b) in
             eval_rpn input vars (v :: stack)
-          | NAME a :: stack ->
-            eval_rpn (LESS :: input) vars ((List.assoc a vars) :: stack)
-          | b :: NAME a :: stack ->
-            eval_rpn (LESS :: input) vars (b :: (List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
         | GREATER -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack ->
             let v = BOOL (a > b) in
             eval_rpn input vars (v :: stack)
-          | NAME a :: stack ->
-            eval_rpn (GREATER :: input) vars ((List.assoc a vars) :: stack)
-          | b :: NAME a :: stack ->
-            eval_rpn (GREATER :: input) vars (b :: (List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
         | LEQ -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack ->
             let v = BOOL (a <= b) in
             eval_rpn input vars (v :: stack)
-          | NAME a :: stack ->
-            eval_rpn (LEQ :: input) vars ((List.assoc a vars) :: stack)
-          | b :: NAME a :: stack ->
-            eval_rpn (LEQ :: input) vars (b :: (List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
         | GEQ -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack ->
             let v = BOOL (a >= b) in
             eval_rpn input vars (v :: stack)
-          | NAME a :: stack ->
-            eval_rpn (GEQ :: input) vars ((List.assoc a vars) :: stack)
-          | b :: NAME a :: stack ->
-            eval_rpn (GEQ :: input) vars (b :: (List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
         | NEQ -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack ->
             let v = BOOL (a <> b) in
@@ -257,13 +231,10 @@ module Interpreter = struct
           | STR b :: STR a :: stack ->
             let v = BOOL (a <> b) in
             eval_rpn input vars (v :: stack)
-          | NAME a :: stack ->
-            eval_rpn (NEQ :: input) vars ((List.assoc a vars) :: stack)
-          | b :: NAME a :: stack ->
-            eval_rpn (NEQ :: input) vars (b :: (List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
         | EQ -> (
+          let stack = dref stack 2 in
           match stack with
           | INT b :: INT a :: stack ->
             let v = BOOL (a = b) in
@@ -271,41 +242,30 @@ module Interpreter = struct
           | STR b :: STR a :: stack ->
             let v = BOOL (a = b) in
             eval_rpn input vars (v :: stack)
-          | NAME a :: stack ->
-            eval_rpn (EQ :: input) vars ((List.assoc a vars) :: stack)
-          | b :: NAME a :: stack ->
-            eval_rpn (EQ :: input) vars (b :: (List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
         | AND -> (
+          let stack = dref stack 2 in
           match stack with
           | BOOL b :: BOOL a :: stack ->
             let v = BOOL (a && b) in
             eval_rpn input vars (v :: stack)
-          | NAME a :: stack ->
-            eval_rpn (AND :: input) vars ((List.assoc a vars) :: stack)
-          | b :: NAME a :: stack ->
-            eval_rpn (AND :: input) vars (b :: (List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
         | OR -> (
+          let stack = dref stack 2 in
           match stack with
           | BOOL b :: BOOL a :: stack ->
             let v = BOOL (a || b) in
             eval_rpn input vars (v :: stack)
-          | NAME a :: stack ->
-            eval_rpn (OR :: input) vars ((List.assoc a vars) :: stack)
-          | b :: NAME a :: stack ->
-            eval_rpn (OR :: input) vars (b :: (List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
         | NOT -> (
+          let stack = dref stack 1 in
           match stack with
           | BOOL a :: stack ->
             let v = BOOL (not a) in
             eval_rpn input vars (v :: stack)
-          | NAME a :: stack ->
-            eval_rpn (NOT :: input) vars ((List.assoc a vars) :: stack)
           | _ -> raise InvalidToken
         )
         | _ -> raise InvalidToken
