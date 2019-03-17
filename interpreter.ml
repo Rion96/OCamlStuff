@@ -6,6 +6,7 @@ module Interpreter = struct
   type token =
     | NAME of string
     | INT of int
+    | BOOL of bool
     | STR of string
     | LET | PRINT
     | NEWLINE | ERROR
@@ -69,7 +70,8 @@ module Interpreter = struct
       )
       | NAME _ :: tl
       | STR _ :: tl
-      | INT _ :: tl ->
+      | INT _ :: tl 
+      | BOOL _ :: tl ->
         let elem = List.hd input in
         rpn tl stack (elem :: output)
       | op :: tl ->
@@ -80,7 +82,8 @@ module Interpreter = struct
       match input with
       | NAME _ :: tl
       | STR _ :: tl
-      | INT _ :: tl ->
+      | INT _ :: tl 
+      | BOOL _ :: tl ->
         eval_rpn tl vars ((List.hd input) :: stack)
       | op :: input -> (
         match op with
@@ -104,6 +107,14 @@ module Interpreter = struct
           | INT a :: stack -> (
             print_int a;
             print_newline ();
+            eval_rpn input vars stack
+          )
+          | BOOL a :: stack -> (
+            if a then (
+              print_endline "TRUE"
+            ) else (
+              print_endline "FALSE"
+            );
             eval_rpn input vars stack
           )
           | _ -> raise InvalidToken
@@ -197,7 +208,7 @@ module Interpreter = struct
         | LESS -> (
           match stack with
           | INT b :: INT a :: stack ->
-            let v = INT (if a < b then 1 else 0) in
+            let v = BOOL (a < b) in
             eval_rpn input vars (v :: stack)
           | NAME a :: stack ->
             eval_rpn (LESS :: input) vars ((List.assoc a vars) :: stack)
@@ -208,7 +219,7 @@ module Interpreter = struct
         | GREATER -> (
           match stack with
           | INT b :: INT a :: stack ->
-            let v = INT (if a > b then 1 else 0) in
+            let v = BOOL (a > b) in
             eval_rpn input vars (v :: stack)
           | NAME a :: stack ->
             eval_rpn (GREATER :: input) vars ((List.assoc a vars) :: stack)
@@ -219,7 +230,7 @@ module Interpreter = struct
         | LEQ -> (
           match stack with
           | INT b :: INT a :: stack ->
-            let v = INT (if a <= b then 1 else 0) in
+            let v = BOOL (a <= b) in
             eval_rpn input vars (v :: stack)
           | NAME a :: stack ->
             eval_rpn (LEQ :: input) vars ((List.assoc a vars) :: stack)
@@ -230,7 +241,7 @@ module Interpreter = struct
         | GEQ -> (
           match stack with
           | INT b :: INT a :: stack ->
-            let v = INT (if a >= b then 1 else 0) in
+            let v = BOOL (a >= b) in
             eval_rpn input vars (v :: stack)
           | NAME a :: stack ->
             eval_rpn (GEQ :: input) vars ((List.assoc a vars) :: stack)
@@ -241,10 +252,10 @@ module Interpreter = struct
         | NEQ -> (
           match stack with
           | INT b :: INT a :: stack ->
-            let v = INT (if a <> b then 1 else 0) in
+            let v = BOOL (a <> b) in
             eval_rpn input vars (v :: stack)
           | STR b :: STR a :: stack ->
-            let v = INT (if a <> b then 1 else 0) in
+            let v = BOOL (a <> b) in
             eval_rpn input vars (v :: stack)
           | NAME a :: stack ->
             eval_rpn (NEQ :: input) vars ((List.assoc a vars) :: stack)
@@ -255,10 +266,10 @@ module Interpreter = struct
         | EQ -> (
           match stack with
           | INT b :: INT a :: stack ->
-            let v = INT (if a = b then 1 else 0) in
+            let v = BOOL (a = b) in
             eval_rpn input vars (v :: stack)
           | STR b :: STR a :: stack ->
-            let v = INT (if a = b then 1 else 0) in
+            let v = BOOL (a = b) in
             eval_rpn input vars (v :: stack)
           | NAME a :: stack ->
             eval_rpn (EQ :: input) vars ((List.assoc a vars) :: stack)
@@ -268,8 +279,8 @@ module Interpreter = struct
         )
         | AND -> (
           match stack with
-          | INT b :: INT a :: stack ->
-            let v = INT (if b = 1 && a = 1 then 1 else 0) in
+          | BOOL b :: BOOL a :: stack ->
+            let v = BOOL (a && b) in
             eval_rpn input vars (v :: stack)
           | NAME a :: stack ->
             eval_rpn (AND :: input) vars ((List.assoc a vars) :: stack)
@@ -279,8 +290,8 @@ module Interpreter = struct
         )
         | OR -> (
           match stack with
-          | INT b :: INT a :: stack ->
-            let v = INT (if b = 1 || a = 1 then 1 else 0) in
+          | BOOL b :: BOOL a :: stack ->
+            let v = BOOL (a || b) in
             eval_rpn input vars (v :: stack)
           | NAME a :: stack ->
             eval_rpn (OR :: input) vars ((List.assoc a vars) :: stack)
@@ -290,8 +301,8 @@ module Interpreter = struct
         )
         | NOT -> (
           match stack with
-          | INT a :: stack ->
-            let v = INT (if a = 1 then 0 else 1) in
+          | BOOL a :: stack ->
+            let v = BOOL (not a) in
             eval_rpn input vars (v :: stack)
           | NAME a :: stack ->
             eval_rpn (NOT :: input) vars ((List.assoc a vars) :: stack)
@@ -329,9 +340,9 @@ module Interpreter = struct
       )
     ) in
     if debug then (
-      debug_iter tokens [("TRUE", INT 1); ("FALSE", INT 0)] []
+      debug_iter tokens [] []
     ) else (
-      iterate tokens [("TRUE", INT 1); ("FALSE", INT 0)];
+      iterate tokens [];
       []
     )
   )
@@ -395,6 +406,7 @@ module Interpreter = struct
     ) in
     let rec main_parser (buffer : token list) = (
       function
+      | ';' :: stack
       | '\n' :: stack ->
         main_parser (NEWLINE :: buffer) stack
       | ')' :: stack ->
@@ -443,6 +455,10 @@ module Interpreter = struct
         main_parser (PRINT :: buffer) tl
       | 'T' :: 'E' :: 'L' :: tl ->
         main_parser (LET :: buffer) tl
+      | 'E' :: 'U' :: 'R' :: 'T' :: tl ->
+        main_parser (BOOL true :: buffer) tl
+      | 'E' :: 'S' :: 'L' :: 'A' :: 'F' :: tl ->
+        main_parser (BOOL false :: buffer) tl
       | c :: stack when c >= '0' && c <= '9' ->
         let tok, stack = int_token "" (c :: stack) in
         main_parser (tok :: buffer) stack

@@ -14,3 +14,4 @@ P "Hello " + W
 P 5 % 2
 P X < Y
 P !(TRUE) || !(43 < 2)
+P !TRUE
