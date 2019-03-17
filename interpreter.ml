@@ -488,7 +488,7 @@ module Interpreter = struct
       | '=' :: '>' :: stack ->
         main_parser (GEQ :: buffer) stack
       | '=' :: '<' :: stack ->
-        main_parser (NEQ :: buffer) stack
+        main_parser (LEQ :: buffer) stack
       | '=' :: '!' :: stack ->
         main_parser (NEQ :: buffer) stack
       | '=' :: stack ->
