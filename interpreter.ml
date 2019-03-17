@@ -3,11 +3,12 @@ module Interpreter = struct
   type token =
     | NAME of string
     | INT of int
+    | FLOAT of float
     | BOOL of bool
     | STR of string
     | LET | PRINT | IF | ELSE | ENDIF | WHILE | ENDWHILE | ARR
-    | NEWLINE | ERROR
-    | UNOP_MINUS | NOT
+    | NEWLINE | ERROR | SEQ
+    | UNOP_MINUS | NOT | POW
     | PLUS | MINUS | MULT | DIV | MOD
     | START | END | BR_START | BR_END
     | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
@@ -19,7 +20,7 @@ module Interpreter = struct
       let rec precedence (op : token) (stack : token list) (output : token list) = (
         let higher_order (op : token) (stack_op : token) = (
           let order = [ARR; NEWLINE;
-                       UNOP_MINUS; NOT; NEWLINE;
+                       UNOP_MINUS; NOT; POW; NEWLINE;
                        MULT; DIV; MOD; NEWLINE;
                        PLUS; MINUS; NEWLINE;
                        LESS; LEQ; GREATER; GEQ; NEWLINE;
@@ -66,6 +67,7 @@ module Interpreter = struct
       ) in
       match input with
       | NEWLINE :: _
+      | SEQ :: _
       | [] -> (
         match stack with
         | [] -> (List.rev output), input
@@ -74,217 +76,13 @@ module Interpreter = struct
       | NAME _ :: tl
       | STR _ :: tl
       | INT _ :: tl 
+      | FLOAT _ :: tl
       | BOOL _ :: tl ->
         let elem = List.hd input in
         rpn tl stack (elem :: output)
       | op :: tl ->
         let stack, output = precedence op stack output in
         rpn tl stack output
-    ) in
-    let rec eval_rpn (input : token list) (vars : (string * token) list) (stack : token list) = (
-      let dref (stack : token list) (n : int) = (
-        let rec loop (stack : token list) (buffer : token list) (index : int) = (
-          if index < n then (
-            match stack with
-            | NAME a :: stack -> (
-              let elem = List.assoc a vars in
-              loop stack (elem :: buffer) (index + 1)
-            )
-            | _ :: tl -> (
-              let elem = List.hd stack in
-              loop tl (elem :: buffer) (index + 1)
-            )
-            | _ -> raise InvalidToken
-          ) else (
-            match buffer with
-            | hd :: tl ->
-              loop (hd :: stack) tl index
-            | [] -> stack
-          )
-        ) in
-        loop stack [] 0
-      ) in
-      match input with
-      | NAME _ :: tl
-      | STR _ :: tl
-      | INT _ :: tl 
-      | BOOL _ :: tl ->
-        eval_rpn tl vars ((List.hd input) :: stack)
-      | op :: input -> (
-        match op with
-        | LET -> (
-          let stack = dref stack 1 in
-          match stack with
-          | v :: NAME n :: stack -> (
-            eval_rpn input ((n, v) :: (List.remove_assoc n vars)) stack
-          )
-          | _ -> raise InvalidToken
-        )
-        | PRINT -> (
-          let stack = dref stack 1 in
-          match stack with
-          | STR a :: stack -> (
-            print_endline a;
-            eval_rpn input vars stack
-          )
-          | INT a :: stack -> (
-            print_int a;
-            print_newline ();
-            eval_rpn input vars stack
-          )
-          | BOOL a :: stack -> (
-            if a then (
-              print_endline "TRUE"
-            ) else (
-              print_endline "FALSE"
-            );
-            eval_rpn input vars stack
-          )
-          | _ -> raise InvalidToken
-        )
-        | PLUS -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack -> (
-            eval_rpn input vars ((INT (a + b)) :: stack)
-          )
-          | STR b :: STR a :: stack -> (
-            eval_rpn input vars ((STR (a ^ b)) :: stack)
-          )
-          | _ -> raise InvalidToken
-        )
-        | MINUS -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack -> (
-            eval_rpn input vars ((INT (a - b)) :: stack)
-          )
-          | _ -> raise InvalidToken
-        )
-        | UNOP_MINUS -> (
-          let stack = dref stack 1 in
-          match stack with
-          | INT a :: stack -> (
-            eval_rpn input vars ((INT (-a)) :: stack)
-          )
-          | _ -> raise InvalidToken
-        )
-        | MULT -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack -> (
-            eval_rpn input vars ((INT (a * b)) :: stack)
-          )
-          | _ -> (
-            raise InvalidToken
-          )
-        )
-        | DIV -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack -> (
-            eval_rpn input vars ((INT (a / b)) :: stack)
-          )
-          | _ -> raise InvalidToken
-        )
-        | MOD -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack ->
-            eval_rpn input vars ((INT (a mod b)) :: stack)
-          | _ -> raise InvalidToken
-        )
-        | LESS -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack ->
-            let v = BOOL (a < b) in
-            eval_rpn input vars (v :: stack)
-          | _ -> raise InvalidToken
-        )
-        | GREATER -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack ->
-            let v = BOOL (a > b) in
-            eval_rpn input vars (v :: stack)
-          | _ -> raise InvalidToken
-        )
-        | LEQ -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack ->
-            let v = BOOL (a <= b) in
-            eval_rpn input vars (v :: stack)
-          | _ -> raise InvalidToken
-        )
-        | GEQ -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack ->
-            let v = BOOL (a >= b) in
-            eval_rpn input vars (v :: stack)
-          | _ -> raise InvalidToken
-        )
-        | NEQ -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack ->
-            let v = BOOL (a <> b) in
-            eval_rpn input vars (v :: stack)
-          | STR b :: STR a :: stack ->
-            let v = BOOL (a <> b) in
-            eval_rpn input vars (v :: stack)
-          | _ -> raise InvalidToken
-        )
-        | EQ -> (
-          let stack = dref stack 2 in
-          match stack with
-          | INT b :: INT a :: stack ->
-            let v = BOOL (a = b) in
-            eval_rpn input vars (v :: stack)
-          | STR b :: STR a :: stack ->
-            let v = BOOL (a = b) in
-            eval_rpn input vars (v :: stack)
-          | _ -> raise InvalidToken
-        )
-        | AND -> (
-          let stack = dref stack 2 in
-          match stack with
-          | BOOL b :: BOOL a :: stack ->
-            let v = BOOL (a && b) in
-            eval_rpn input vars (v :: stack)
-          | _ -> raise InvalidToken
-        )
-        | OR -> (
-          let stack = dref stack 2 in
-          match stack with
-          | BOOL b :: BOOL a :: stack ->
-            let v = BOOL (a || b) in
-            eval_rpn input vars (v :: stack)
-          | _ -> raise InvalidToken
-        )
-        | NOT -> (
-          let stack = dref stack 1 in
-          match stack with
-          | BOOL a :: stack ->
-            let v = BOOL (not a) in
-            eval_rpn input vars (v :: stack)
-          | _ -> raise InvalidToken
-        )
-        | ARR -> (
-          let stack = dref stack 1 in
-          match stack with
-          | INT i :: NAME n :: stack ->
-            let arr = "ARR_" ^ n ^ "_" ^ (string_of_int i) in
-            eval_rpn input vars ((NAME arr) :: stack)
-          | _ -> raise InvalidToken
-        )
-        | _ -> raise InvalidToken
-      )
-      | [] -> (
-        vars
-      )
     ) in
     let strip_if (stack : token list) = (
       let rec loop (stack : token list) (cnt : int) = (
@@ -353,9 +151,10 @@ module Interpreter = struct
       ) in
       let rec store_while (stack : token list) (buffer : token list) = (
         match stack with
+        | SEQ :: tl
         | NEWLINE :: tl -> (
           let stmts = create_buffer tl [] 1 in
-          let fst_stmts = List.append (NEWLINE :: buffer) stmts in
+          let fst_stmts = List.append (List.hd stack :: buffer) stmts in
           back tl fst_stmts
         )
         | hd :: tl -> store_while tl (hd :: buffer)
@@ -364,8 +163,332 @@ module Interpreter = struct
       store_while stack []
     ) in
     let rec iterate (input : token list) (vars : (string * token) list) = (
+      let rec eval_rpn (input : token list) (vars : (string * token) list) (stack : token list) = (
+        let dref (stack : token list) (n : int) = (
+          let rec loop (stack : token list) (buffer : token list) (index : int) = (
+            if index < n then (
+              match stack with
+              | NAME a :: stack -> (
+                let elem = List.assoc a vars in
+                loop stack (elem :: buffer) (index + 1)
+              )
+              | _ :: tl -> (
+                let elem = List.hd stack in
+                loop tl (elem :: buffer) (index + 1)
+              )
+              | _ -> raise InvalidToken
+            ) else (
+              match buffer with
+              | hd :: tl ->
+                loop (hd :: stack) tl index
+              | [] -> stack
+            )
+          ) in
+          loop stack [] 0
+        ) in
+        match input with
+        | NAME _ :: tl
+        | STR _ :: tl
+        | INT _ :: tl 
+        | FLOAT _ :: tl
+        | BOOL _ :: tl ->
+          eval_rpn tl vars ((List.hd input) :: stack)
+        | op :: input -> (
+          match op with
+          | LET -> (
+            let stack = dref stack 1 in
+            match stack with
+            | v :: NAME n :: stack -> (
+              eval_rpn input ((n, v) :: (List.remove_assoc n vars)) stack
+            )
+            | _ -> raise InvalidToken
+          )
+          | PRINT -> (
+            let stack = dref stack 1 in
+            match stack with
+            | STR a :: stack -> (
+              print_endline a;
+              eval_rpn input vars stack
+            )
+            | INT a :: stack -> (
+              print_int a;
+              print_newline ();
+              eval_rpn input vars stack
+            )
+            | FLOAT a :: stack -> (
+              print_float a;
+              print_newline ();
+              eval_rpn input vars stack
+            )
+            | BOOL a :: stack -> (
+              if a then (
+                print_endline "TRUE"
+              ) else (
+                print_endline "FALSE"
+              );
+              eval_rpn input vars stack
+            )
+            | _ -> raise InvalidToken
+          )
+          | PLUS -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack -> (
+              eval_rpn input vars ((INT (a + b)) :: stack)
+            )
+            | FLOAT b :: FLOAT a :: stack -> (
+              eval_rpn input vars ((FLOAT (a +. b) :: stack))
+            )
+            | FLOAT f :: INT i :: stack
+            | INT i :: FLOAT f :: stack -> (
+              let i = float_of_int i in
+              eval_rpn input vars ((FLOAT (i +. f) :: stack))
+            )
+            | STR b :: STR a :: stack -> (
+              eval_rpn input vars ((STR (a ^ b)) :: stack)
+            )
+            | _ -> raise InvalidToken
+          )
+          | MINUS -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack -> (
+              eval_rpn input vars ((INT (a - b)) :: stack)
+            )
+            | FLOAT b :: FLOAT a :: stack -> (
+              eval_rpn input vars ((FLOAT (a -. b) :: stack))
+            )
+            | FLOAT b :: INT a :: stack -> (
+              let a = float_of_int a in
+              eval_rpn input vars ((FLOAT (a -. b) :: stack))
+            )
+            | INT b :: FLOAT a :: stack -> (
+              let b = float_of_int b in
+              eval_rpn input vars ((FLOAT (a -. b) :: stack))
+            )
+            | _ -> raise InvalidToken
+          )
+          | UNOP_MINUS -> (
+            let stack = dref stack 1 in
+            match stack with
+            | INT a :: stack -> (
+              eval_rpn input vars ((INT (-a)) :: stack)
+            )
+            | FLOAT a :: stack -> (
+              eval_rpn input vars ((FLOAT (-.a) :: stack))
+            )
+            | _ -> raise InvalidToken
+          )
+          | MULT -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack -> (
+              eval_rpn input vars ((INT (a * b)) :: stack)
+            )
+            | FLOAT b :: FLOAT a :: stack -> (
+              eval_rpn input vars ((FLOAT (a *. b) :: stack))
+            )
+            | FLOAT f :: INT i :: stack
+            | INT i :: FLOAT f :: stack -> (
+              let i = float_of_int i in
+              eval_rpn input vars ((FLOAT (i *. f) :: stack))
+            )
+            | _ -> (
+              raise InvalidToken
+            )
+          )
+          | DIV -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack -> (
+              eval_rpn input vars ((INT (a / b)) :: stack)
+            )
+            | FLOAT b :: FLOAT a :: stack -> (
+              eval_rpn input vars ((FLOAT (a /. b) :: stack))
+            )
+            | FLOAT b :: INT a :: stack -> (
+              let a = float_of_int a in
+              eval_rpn input vars ((FLOAT (a /. b) :: stack))
+            )
+            | INT b :: FLOAT a :: stack -> (
+              let b = float_of_int b in
+              eval_rpn input vars ((FLOAT (a /. b) :: stack))
+            )
+            | _ -> raise InvalidToken
+          )
+          | MOD -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack ->
+              eval_rpn input vars ((INT (a mod b)) :: stack)
+            | _ -> raise InvalidToken
+          )
+          | LESS -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack ->
+              let v = BOOL (a < b) in
+              eval_rpn input vars (v :: stack)
+            | FLOAT b :: FLOAT a :: stack ->
+              eval_rpn input vars (BOOL (a < b) :: stack)
+            | FLOAT b :: INT a :: stack -> (
+              let a = float_of_int a in
+              eval_rpn input vars (BOOL (a < b) :: stack)
+            )
+            | INT b :: FLOAT a :: stack -> (
+              let b = float_of_int b in
+              eval_rpn input vars (BOOL (a < b) :: stack)
+            )
+            | _ -> raise InvalidToken
+          )
+          | GREATER -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack ->
+              let v = BOOL (a > b) in
+              eval_rpn input vars (v :: stack)
+            | FLOAT b :: FLOAT a :: stack ->
+              eval_rpn input vars (BOOL (a > b) :: stack)
+            | FLOAT b :: INT a :: stack -> (
+              let a = float_of_int a in
+              eval_rpn input vars (BOOL (a > b) :: stack)
+            )
+            | INT b :: FLOAT a :: stack -> (
+              let b = float_of_int b in
+              eval_rpn input vars (BOOL (a > b) :: stack)
+            )
+            | _ -> raise InvalidToken
+          )
+          | LEQ -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack ->
+              let v = BOOL (a <= b) in
+              eval_rpn input vars (v :: stack)
+            | FLOAT b :: FLOAT a :: stack ->
+              eval_rpn input vars (BOOL (a <= b) :: stack)
+            | FLOAT b :: INT a :: stack -> (
+              let a = float_of_int a in
+              eval_rpn input vars (BOOL (a <= b) :: stack)
+            )
+            | INT b :: FLOAT a :: stack -> (
+              let b = float_of_int b in
+              eval_rpn input vars (BOOL (a <= b) :: stack)
+            )
+            | _ -> raise InvalidToken
+          )
+          | GEQ -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack ->
+              let v = BOOL (a >= b) in
+              eval_rpn input vars (v :: stack)
+            | FLOAT b :: FLOAT a :: stack ->
+              eval_rpn input vars (BOOL (a >= b) :: stack)
+            | FLOAT b :: INT a :: stack -> (
+              let a = float_of_int a in
+              eval_rpn input vars (BOOL (a >= b) :: stack)
+            )
+            | INT b :: FLOAT a :: stack -> (
+              let b = float_of_int b in
+              eval_rpn input vars (BOOL (a >= b) :: stack)
+            )
+            | _ -> raise InvalidToken
+          )
+          | NEQ -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack ->
+              let v = BOOL (a <> b) in
+              eval_rpn input vars (v :: stack)
+            | FLOAT b :: FLOAT a :: stack -> (
+              eval_rpn input vars ((BOOL (a <> b) :: stack))
+            )
+            | FLOAT f :: INT i :: stack
+            | INT i :: FLOAT f :: stack -> (
+              let i = float_of_int i in
+              eval_rpn input vars ((BOOL (i <> f) :: stack))
+            )
+            | STR b :: STR a :: stack ->
+              let v = BOOL (a <> b) in
+              eval_rpn input vars (v :: stack)
+            | _ -> raise InvalidToken
+          )
+          | EQ -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack ->
+              let v = BOOL (a = b) in
+              eval_rpn input vars (v :: stack)
+            | FLOAT b :: FLOAT a :: stack -> (
+              eval_rpn input vars ((BOOL (a = b) :: stack))
+            )
+            | FLOAT f :: INT i :: stack
+            | INT i :: FLOAT f :: stack -> (
+              let i = float_of_int i in
+              eval_rpn input vars ((BOOL (i = f) :: stack))
+            )
+            | STR b :: STR a :: stack ->
+              let v = BOOL (a = b) in
+              eval_rpn input vars (v :: stack)
+            | _ -> raise InvalidToken
+          )
+          | AND -> (
+            let stack = dref stack 2 in
+            match stack with
+            | BOOL b :: BOOL a :: stack ->
+              let v = BOOL (a && b) in
+              eval_rpn input vars (v :: stack)
+            | _ -> raise InvalidToken
+          )
+          | OR -> (
+            let stack = dref stack 2 in
+            match stack with
+            | BOOL b :: BOOL a :: stack ->
+              let v = BOOL (a || b) in
+              eval_rpn input vars (v :: stack)
+            | _ -> raise InvalidToken
+          )
+          | NOT -> (
+            let stack = dref stack 1 in
+            match stack with
+            | BOOL a :: stack ->
+              let v = BOOL (not a) in
+              eval_rpn input vars (v :: stack)
+            | _ -> raise InvalidToken
+          )
+          | ARR -> (
+            let stack = dref stack 1 in
+            match stack with
+            | INT i :: NAME n :: stack when i >= 0 ->
+              let arr = "ARR_" ^ n ^ "_" ^ (string_of_int i) in
+              eval_rpn input vars ((NAME arr) :: stack)
+            | _ -> raise InvalidToken
+          )
+          | POW -> (
+            let stack = dref stack 2 in
+            match stack with
+            | INT b :: INT a :: stack ->
+              let b = float_of_int b in
+              let a = float_of_int a in
+              eval_rpn input vars ((FLOAT (a ** b)) :: stack)
+            | FLOAT b :: INT a :: stack ->
+              let a = float_of_int a in
+              eval_rpn input vars ((FLOAT (a ** b)) :: stack)
+            | INT b :: FLOAT a :: stack ->
+              let b = float_of_int b in
+              eval_rpn input vars ((FLOAT (a ** b)) :: stack)
+            | _ -> raise InvalidToken
+          )
+          | _ -> raise InvalidToken
+        )
+        | [] -> (
+          vars
+        )
+      ) in  
       match input with
-      | [] -> ()
+      | [] -> vars
+      | SEQ :: input
       | NEWLINE :: input -> iterate input vars
       | IF :: input -> (
         let expr, input = rpn (LET :: NAME "_EVAL_" :: input) [] [] in
@@ -408,16 +531,20 @@ module Interpreter = struct
         []
       )
     ) in
-    let rec int_token (buffer : string) = (
+    let rec num_token (buffer : string) = (
       function
-      | hd :: tl when hd >= '0' && hd <= '9' -> (
-        int_token ((String.make 1 hd) ^ buffer) tl
+      | hd :: tl when hd = '.' || hd >= '0' && hd <= '9' -> (
+        num_token ((String.make 1 hd) ^ buffer) tl
       )
       | stack -> (
         try (
           INT (int_of_string buffer), stack
         ) with exn -> (
-          ERROR, stack
+          try (
+            FLOAT (float_of_string buffer), stack
+          ) with exn -> (
+            ERROR, stack
+          )
         )
       )
     ) in
@@ -435,12 +562,12 @@ module Interpreter = struct
     ) in
     let rec name_token (buffer : string) (input : char list) = (
       match input with
-      | '-' :: stack
-      | '+' :: stack
-      | '!' :: stack
-      | '(' :: stack
-      | '[' :: stack
-      | ' ' :: stack -> (
+      | '-' :: _
+      | '+' :: _
+      | '!' :: _
+      | '(' :: _
+      | '[' :: _
+      | ' ' :: _ -> (
         NAME buffer, input
       )
       | hd :: tl when hd >= 'A' && hd <= 'Z' -> (
@@ -455,7 +582,8 @@ module Interpreter = struct
     ) in
     let rec main_parser (buffer : token list) = (
       function
-      | ';' :: stack
+      | ';' :: stack ->
+        main_parser (SEQ :: buffer) stack
       | '\n' :: stack ->
         main_parser (NEWLINE :: buffer) stack
       | ']' :: stack ->
@@ -479,6 +607,8 @@ module Interpreter = struct
         main_parser (DIV :: buffer) stack
       | '%' :: stack ->
         main_parser (MOD :: buffer) stack
+      | '^' :: stack ->
+        main_parser (POW :: buffer) stack
       | '!' :: stack ->
         main_parser (NOT :: buffer) stack
       | '|' :: '|' :: stack ->
@@ -532,8 +662,11 @@ module Interpreter = struct
       (* WHILE *)
       | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: tl ->
         main_parser (WHILE :: buffer) tl 
+      | '.' :: c :: stack when c >= '0' && c <= '9' ->
+        let tok, stack = num_token "" ('.' :: c :: stack) in
+        main_parser (tok :: buffer) stack
       | c :: stack when c >= '0' && c <= '9' ->
-        let tok, stack = int_token "" (c :: stack) in
+        let tok, stack = num_token "" (c :: stack) in
         main_parser (tok :: buffer) stack
       | c :: stack ->
         let tok, stack = name_token "" (c :: stack) in

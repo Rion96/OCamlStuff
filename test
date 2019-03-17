@@ -40,3 +40,8 @@ WHILE X <= 10
   PRINT X
   LET X X + 1
 ENDWHILE
+LET ARRAY[X - 1 * 2] 123
+LET F 4.3; PRINT F
+LET F 4. ; PRINT F
+PRINT 3.5 + 2 / 3.
+PRINT 5 ^ (2 - 1) * 2 + 5
