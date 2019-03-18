@@ -561,7 +561,10 @@ module Interpreter = struct
           match List.assoc "_EVAL_" vars with
           | BOOL true -> (
             let vars = iterate copy vars funs in
-            loop vars
+            if List.mem_assoc "_RETURN_" vars then
+              vars
+            else
+              loop vars
           )
           | BOOL false -> iterate stack vars funs
           | eval -> raise (InvalidToken (eval, "at WHILE"))

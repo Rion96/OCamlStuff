@@ -1,0 +1,46 @@
+# Bubble sort for interpreter.ml
+
+FUN PRINTARR
+    LET I 0
+    WHILE I < N
+        PRINT X[I]
+        PRINT " "
+        LET I (I + 1)
+    ENDWHILE
+    PRINTLN ""
+ENDFUN
+
+FUN BUBBLE
+    FUN VERI
+        LET I 0
+        WHILE I < (N - 1)
+            IF X[I] > X[I + 1]
+                RETURN TRUE
+            ENDIF
+            LET I (I + 1)
+        ENDWHILE
+        RETURN FALSE
+    ENDFUN
+    WHILE VERI
+        LET I 0
+        WHILE I < (N - 1)
+            IF X[I] > X[I + 1]
+                LET TMP X[I + 1]
+                LET X[I + 1] X[I]
+                LET X[I] TMP
+            ENDIF
+            LET I (I + 1)
+        ENDWHILE
+    ENDWHILE
+    PRINTARR
+ENDFUN
+
+LET N 16
+LET I 0
+WHILE I < N
+    LET X[I] (N - I)
+    LET I (I + 1)
+ENDWHILE
+
+PRINTARR
+BUBBLE
