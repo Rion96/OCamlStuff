@@ -2,167 +2,208 @@ module Interpreter = struct
 
   type token =
     | NAME of string
+    | FUN of string | ENDFUN
     | INT of int
     | FLOAT of float
     | BOOL of bool
     | STR of string
-    | LET | PRINT | IF | ELSE | ENDIF | WHILE | ENDWHILE | ARR
-    | NEWLINE | ERROR | SEQ
-    | UNOP_MINUS | NOT | POW
+    | LET | PRINT | PRINTLN
+    | IF | ELSE | ENDIF | WHILE | ENDWHILE
+    | NEWLINE | ERROR | SEQ | RETURN
+    | UNOP_MINUS | NOT | POW | ARR
     | PLUS | MINUS | MULT | DIV | MOD
     | START | END | BR_START | BR_END
     | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
 
   exception InvalidToken
+  exception InvalidFunction
 
   let interpreter (tokens : token list) = (
-    let rec rpn (input : token list) (stack : token list) (output : token list) = (
-      let rec precedence (op : token) (stack : token list) (output : token list) = (
-        let higher_order (op : token) (stack_op : token) = (
-          let order = [ARR; NEWLINE;
-                       UNOP_MINUS; NOT; POW; NEWLINE;
-                       MULT; DIV; MOD; NEWLINE;
-                       PLUS; MINUS; NEWLINE;
-                       LESS; LEQ; GREATER; GEQ; NEWLINE;
-                       NEQ; EQ; NEWLINE;
-                       AND; NEWLINE;
-                       OR; NEWLINE;
-                       LET; PRINT] in
-          let rec loop (input : token list) (level : int) (op : token) = (
-            match input with
-            | NEWLINE :: input -> loop input (level + 1) op
-            | hd :: tl when hd = op -> level
-            | _ :: input -> loop input level op
-            | [] -> print_endline "precedence failure!"; raise InvalidToken
+    let rec iterate (input : token list)
+                    (vars : (string * token) list)
+                    (funs : (string * (int * string list * token list)) list) = (
+      let rec rpn (input : token list) (stack : token list) (output : token list) = (
+        let rec precedence (op : token) (stack : token list) (output : token list) = (
+          let higher_order (op : token) (stack_op : token) = (
+            let order = [ARR; NEWLINE;
+                         UNOP_MINUS; NOT; POW; NEWLINE;
+                         MULT; DIV; MOD; NEWLINE;
+                         PLUS; MINUS; NEWLINE;
+                         LESS; LEQ; GREATER; GEQ; NEWLINE;
+                         NEQ; EQ; NEWLINE;
+                         AND; NEWLINE;
+                         OR; NEWLINE;
+                         LET; PRINT; PRINTLN; RETURN] in
+            let rec loop (input : token list) (level : int) (op : token) = (
+              match op with
+              | FUN _ -> 0
+              | _ -> (
+                match input with
+                | NEWLINE :: input -> loop input (level + 1) op
+                | hd :: tl when hd = op -> level
+                | _ :: input -> loop input level op
+                | [] -> print_endline "precedence failure!"; raise InvalidToken
+              )
+            ) in
+            let op, stack_op = loop order 0 op, loop order 0 stack_op in
+            if op < stack_op then true else false
           ) in
-          let op, stack_op = loop order 0 op, loop order 0 stack_op in
-          if op < stack_op then true else false
-        ) in
-        match stack with
-        | [] ->
-          [op], output
-        | stack_op :: tl -> (
-          match op, stack_op with
-          (* Special cases with parentheses and brackets *)
-          | BR_END, BR_START ->
-            tl, (ARR :: output)
-          | END, START ->
-            tl, output
-          | BR_END, _
-          | END, _ ->
-            precedence op tl (stack_op :: output)
-          | BR_START, _
-          | START, _ 
-          | _, BR_START
-          | _, START ->
-            (op :: stack), output
-          | op, stack_op -> (
-            if higher_order op stack_op then (
-              (op :: stack), output
-            ) else (
+          match stack with
+          | [] ->
+            [op], output
+          | stack_op :: tl -> (
+            match op, stack_op with
+            (* Special cases with parentheses and brackets *)
+            | BR_END, BR_START ->
+              tl, (ARR :: output)
+            | END, START ->
+              tl, output
+            | BR_END, _
+            | END, _ ->
               precedence op tl (stack_op :: output)
+            | BR_START, _
+            | START, _ 
+            | _, BR_START
+            | _, START ->
+              (op :: stack), output
+            | op, stack_op -> (
+              if higher_order op stack_op then (
+                (op :: stack), output
+              ) else (
+                precedence op tl (stack_op :: output)
+              )
             )
           )
-        )
-      ) in
-      match input with
-      | NEWLINE :: _
-      | SEQ :: _
-      | [] -> (
-        match stack with
-        | [] -> (List.rev output), input
-        | hd :: tl -> rpn input tl (hd :: output)
-      )
-      | NAME _ :: tl
-      | STR _ :: tl
-      | INT _ :: tl 
-      | FLOAT _ :: tl
-      | BOOL _ :: tl ->
-        let elem = List.hd input in
-        rpn tl stack (elem :: output)
-      | op :: tl ->
-        let stack, output = precedence op stack output in
-        rpn tl stack output
-    ) in
-    let strip_if (stack : token list) = (
-      let rec loop (stack : token list) (cnt : int) = (
-        if cnt > 0 then (
+        ) in
+        match input with
+        | NEWLINE :: _
+        | SEQ :: _
+        | [] -> (
           match stack with
-          | IF :: stack -> loop stack (cnt + 1)
-          | ELSE :: stack when cnt = 1 -> stack
-          | ENDIF :: stack -> loop stack (cnt - 1)
-          | _ :: stack -> loop stack cnt
-          | [] -> []
-        ) else (
-          stack
+          | [] -> (List.rev output), input
+          | hd :: tl -> rpn input tl (hd :: output)
         )
-      ) in
-      loop stack 1
-    ) in
-    let strip_else (stack : token list) = (
-      let rec loop (stack : token list) (buffer : token list) (cnt : int) = (
-        if cnt > 0 then (
-          match stack with
-          | IF :: tl -> loop tl buffer (cnt + 1)
-          | ENDIF :: tl -> loop tl buffer (cnt - 1)
-          | _ :: tl -> loop tl buffer cnt
-          | [] -> []
-        ) else (
-          match buffer with
-          | hd :: tl -> loop (hd :: stack) tl cnt
-          | [] -> stack
+        | NAME n :: tl when List.mem_assoc n funs -> (
+          rpn tl (FUN n :: stack) output
         )
+        | NAME _ :: tl
+        | STR _ :: tl
+        | INT _ :: tl 
+        | FLOAT _ :: tl
+        | BOOL _ :: tl ->
+          let elem = List.hd input in
+          rpn tl stack (elem :: output)
+        | op :: tl ->
+          let stack, output = precedence op stack output in
+          rpn tl stack output
       ) in
-      let rec store_if (input : token list) (buffer : token list) (cnt : int) = (
-        if cnt > 0 then (
-          match input with
-          | IF :: tl -> store_if tl (IF :: buffer) (cnt + 1)
-          | ELSE :: tl when cnt = 1 -> loop tl buffer 1
-          | ENDIF :: tl -> store_if tl (ENDIF :: buffer) (cnt - 1)
-          | hd :: tl -> store_if tl (hd :: buffer) cnt
-          | [] -> []
-        ) else (
-          stack
-        )
+      let strip_if (stack : token list) = (
+        let rec loop (stack : token list) (cnt : int) = (
+          if cnt > 0 then (
+            match stack with
+            | IF :: stack -> loop stack (cnt + 1)
+            | ELSE :: stack when cnt = 1 -> stack
+            | ENDIF :: stack -> loop stack (cnt - 1)
+            | _ :: stack -> loop stack cnt
+            | [] -> []
+          ) else (
+            stack
+          )
+        ) in
+        loop stack 1
       ) in
-      store_if stack [] 1
-    ) in
-    let rec strip_while (stack : token list) (cnt : int) = (
-      match stack with
-      | WHILE :: tl -> strip_while tl (cnt + 1)
-      | ENDWHILE :: tl when cnt = 1 -> tl
-      | ENDWHILE :: tl -> strip_while tl (cnt - 1)
-      | hd :: tl -> strip_while tl cnt
-      | [] -> []
-    ) in
-    let copy_while (stack : token list) = (
-      let rec back (stack : token list) (buffer : token list)= (
-        match buffer with
-        | hd :: tl -> back (hd :: stack) tl
-        | [] -> stack
+      let strip_else (stack : token list) = (
+        let rec loop (stack : token list) (buffer : token list) (cnt : int) = (
+          if cnt > 0 then (
+            match stack with
+            | IF :: tl -> loop tl buffer (cnt + 1)
+            | ENDIF :: tl -> loop tl buffer (cnt - 1)
+            | _ :: tl -> loop tl buffer cnt
+            | [] -> []
+          ) else (
+            match buffer with
+            | hd :: tl -> loop (hd :: stack) tl cnt
+            | [] -> stack
+          )
+        ) in
+        let rec store_if (input : token list) (buffer : token list) (cnt : int) = (
+          if cnt > 0 then (
+            match input with
+            | IF :: tl -> store_if tl (IF :: buffer) (cnt + 1)
+            | ELSE :: tl when cnt = 1 -> loop tl buffer 1
+            | ENDIF :: tl -> store_if tl (ENDIF :: buffer) (cnt - 1)
+            | hd :: tl -> store_if tl (hd :: buffer) cnt
+            | [] -> []
+          ) else (
+            stack
+          )
+        ) in
+        store_if stack [] 1
       ) in
-      let rec create_buffer (stack : token list) (buffer : token list) (cnt : int) = (
+      let rec strip_while (stack : token list) (cnt : int) = (
         match stack with
-        | WHILE :: tl -> create_buffer tl (WHILE :: buffer) (cnt + 1)
-        | ENDWHILE :: tl when cnt = 1 -> buffer
-        | ENDWHILE :: tl -> create_buffer tl (ENDWHILE :: buffer) (cnt - 1)
-        | hd :: tl -> create_buffer tl (hd :: buffer) cnt
-        | [] -> buffer
-      ) in
-      let rec store_while (stack : token list) (buffer : token list) = (
-        match stack with
-        | SEQ :: tl
-        | NEWLINE :: tl -> (
-          let stmts = create_buffer tl [] 1 in
-          let fst_stmts = List.append (List.hd stack :: buffer) stmts in
-          back tl fst_stmts
-        )
-        | hd :: tl -> store_while tl (hd :: buffer)
+        | WHILE :: tl -> strip_while tl (cnt + 1)
+        | ENDWHILE :: tl when cnt = 1 -> tl
+        | ENDWHILE :: tl -> strip_while tl (cnt - 1)
+        | hd :: tl -> strip_while tl cnt
         | [] -> []
       ) in
-      store_while stack []
-    ) in
-    let rec iterate (input : token list) (vars : (string * token) list) = (
+      let copy_while (stack : token list) = (
+        let rec back (stack : token list) (buffer : token list)= (
+          match buffer with
+          | hd :: tl -> back (hd :: stack) tl
+          | [] -> stack
+        ) in
+        let rec create_buffer (stack : token list) (buffer : token list) (cnt : int) = (
+          match stack with
+          | WHILE :: tl -> create_buffer tl (WHILE :: buffer) (cnt + 1)
+          | ENDWHILE :: tl when cnt = 1 -> buffer
+          | ENDWHILE :: tl -> create_buffer tl (ENDWHILE :: buffer) (cnt - 1)
+          | hd :: tl -> create_buffer tl (hd :: buffer) cnt
+          | [] -> buffer
+        ) in
+        let rec store_while (stack : token list) (buffer : token list) = (
+          match stack with
+          | SEQ :: tl
+          | NEWLINE :: tl -> (
+            let stmts = create_buffer tl [] 1 in
+            let fst_stmts = List.append (List.hd stack :: buffer) stmts in
+            back tl fst_stmts
+          )
+          | hd :: tl -> store_while tl (hd :: buffer)
+          | [] -> []
+        ) in
+        store_while stack []
+      ) in
+      let store_fun (input : token list) = (
+        let rec parse_args (input : token list) (output : string list) (counter : int) = (
+          match input with
+          | NEWLINE :: input
+          | SEQ :: input -> (
+            input, counter, output
+          )
+          | NAME n :: input -> (
+            parse_args input (n :: output) (counter + 1)
+          )
+          | _ -> raise InvalidFunction
+        ) in 
+        let rec skip_fun (input : token list) (output : token list) (counter : int) = (
+          match input with
+          | FUN "_DEF_" :: tl ->
+            skip_fun tl (List.hd input :: output) (counter + 1)
+          | ENDFUN :: tl when counter = 1 ->
+            tl, List.rev output
+          | ENDFUN :: tl ->
+            skip_fun tl (List.hd input :: output) (counter - 1)
+          | hd :: tl ->
+            skip_fun tl (hd :: output) counter
+          | [] ->
+            raise InvalidFunction
+        ) in
+        let (input, argc, argv : token list * int * string list) = parse_args input [] 0 in
+        let (output, sequence : token list * token list) = skip_fun input [] 1 in
+        (argc, argv, sequence), output
+      ) in
       let rec eval_rpn (input : token list) (vars : (string * token) list) (stack : token list) = (
         let dref (stack : token list) (n : int) = (
           let rec loop (stack : token list) (buffer : token list) (index : int) = (
@@ -203,7 +244,49 @@ module Interpreter = struct
             )
             | _ -> raise InvalidToken
           )
+          | FUN n -> (
+            let argc, args, sequence = List.assoc n funs in
+            let stack = dref stack argc in
+            let rec assign (args : string list) (stack : token list) (vars : (string * token) list) = (
+              match args, stack with
+              | n :: tl, v :: stack ->
+                assign tl stack ((n, v) :: (List.remove_assoc n vars))
+              | [], _ -> vars
+              | _ -> print_endline "Invalid function evaluation!"; raise InvalidFunction
+            ) in
+            let fn_vars = assign args stack vars in
+            let res_vars = iterate sequence fn_vars funs in
+            if List.mem_assoc "_RETURN_" res_vars then
+              eval_rpn input vars ((List.assoc "_RETURN_" res_vars) :: stack)
+            else
+              eval_rpn input vars stack
+          )
           | PRINT -> (
+            let stack = dref stack 1 in
+            match stack with
+            | STR a :: stack -> (
+              print_string a;
+              eval_rpn input vars stack
+            )
+            | INT a :: stack -> (
+              print_int a;
+              eval_rpn input vars stack
+            )
+            | FLOAT a :: stack -> (
+              print_float a;
+              eval_rpn input vars stack
+            )
+            | BOOL a :: stack -> (
+              if a then (
+                print_string "TRUE"
+              ) else (
+                print_string "FALSE"
+              );
+              eval_rpn input vars stack
+            )
+            | _ -> raise InvalidToken
+          )
+          | PRINTLN -> (
             let stack = dref stack 1 in
             match stack with
             | STR a :: stack -> (
@@ -489,33 +572,41 @@ module Interpreter = struct
       match input with
       | [] -> vars
       | SEQ :: input
-      | NEWLINE :: input -> iterate input vars
+      | NEWLINE :: input -> iterate input vars funs
       | IF :: input -> (
         let expr, input = rpn (LET :: NAME "_EVAL_" :: input) [] [] in
         let vars = eval_rpn expr vars [] in
         match List.assoc "_EVAL_" vars with
-        | BOOL true -> iterate (strip_else input) vars
-        | BOOL false -> iterate (strip_if input) vars
+        | BOOL true -> iterate (strip_else input) vars funs
+        | BOOL false -> iterate (strip_if input) vars funs
         | _ -> raise InvalidToken
+      )
+      | RETURN :: input -> (
+        let expr, _ = rpn (LET :: NAME "_RETURN_" :: input) [] [] in
+        let vars = eval_rpn expr vars [] in
+        vars
       )
       | WHILE :: tl -> (
         let expr, tl = rpn (LET :: NAME "_EVAL_" :: tl) [] [] in
         let vars = eval_rpn expr vars [] in
         match List.assoc "_EVAL_" vars with
-        | BOOL true -> iterate (copy_while input) vars
-        | BOOL false -> iterate (strip_while tl 1) vars
+        | BOOL true -> iterate (copy_while input) vars funs
+        | BOOL false -> iterate (strip_while tl 1) vars funs
         | _ -> raise InvalidToken
       )
       | ENDWHILE :: input
       | ENDIF :: input ->
-        iterate input (List.remove_assoc "_EVAL_" vars)
+        iterate input (List.remove_assoc "_EVAL_" vars) funs
+      | FUN "_DEF_" :: NAME n :: input ->
+        let new_fun, input = store_fun input in
+        iterate input vars ((n, new_fun) :: (List.remove_assoc n funs))
       | _ -> (
         let expr, input = rpn input [] [] in
         let vars = eval_rpn expr vars [] in
-        iterate input vars
+        iterate input vars funs
       )
     ) in
-    iterate tokens []
+    iterate tokens [] []
   )
 
   let tokenizer (stack : char list) = (
@@ -562,6 +653,8 @@ module Interpreter = struct
     ) in
     let rec name_token (buffer : string) (input : char list) = (
       match input with
+      | '\n' :: _
+      | ';' :: _
       | '-' :: _
       | '+' :: _
       | '!' :: _
@@ -635,6 +728,9 @@ module Interpreter = struct
       | '"' :: stack ->
         let tok, stack = str_token "" stack in
         main_parser (tok :: buffer) stack
+      (* PRINTLN *)
+      | 'N' :: 'L' :: 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: tl ->
+        main_parser (PRINTLN :: buffer) tl
       (* PRINT *)
       | 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: tl ->
         main_parser (PRINT :: buffer) tl
@@ -662,6 +758,15 @@ module Interpreter = struct
       (* WHILE *)
       | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: tl ->
         main_parser (WHILE :: buffer) tl 
+      (* ENDFUN *)
+      | 'N' :: 'U' :: 'F' :: 'D' :: 'N' :: 'E' :: tl ->
+        main_parser (ENDFUN :: buffer) tl
+      (* FUN *)
+      | 'N' :: 'U' :: 'F' :: tl ->
+        main_parser (FUN "_DEF_" :: buffer) tl
+      (* RETURN *)
+      | 'N' :: 'R' :: 'U' :: 'T' :: 'E' :: 'R' :: tl ->
+        main_parser (RETURN :: buffer) tl
       | '.' :: c :: stack when c >= '0' && c <= '9' ->
         let tok, stack = num_token "" ('.' :: c :: stack) in
         main_parser (tok :: buffer) stack
