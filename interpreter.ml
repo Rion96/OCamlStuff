@@ -140,40 +140,16 @@ module Interpreter = struct
         ) in
         store_if stack [] 1
       ) in
-      let rec strip_while (stack : token list) (cnt : int) = (
-        match stack with
-        | WHILE :: tl -> strip_while tl (cnt + 1)
-        | ENDWHILE :: tl when cnt = 1 -> tl
-        | ENDWHILE :: tl -> strip_while tl (cnt - 1)
-        | hd :: tl -> strip_while tl cnt
-        | [] -> []
-      ) in
       let copy_while (stack : token list) = (
-        let rec back (stack : token list) (buffer : token list)= (
-          match buffer with
-          | hd :: tl -> back (hd :: stack) tl
-          | [] -> stack
-        ) in
-        let rec create_buffer (stack : token list) (buffer : token list) (cnt : int) = (
+        let rec strip_while (stack : token list) (buffer : token list) (cnt : int) = (
           match stack with
-          | WHILE :: tl -> create_buffer tl (WHILE :: buffer) (cnt + 1)
-          | ENDWHILE :: tl when cnt = 1 -> buffer
-          | ENDWHILE :: tl -> create_buffer tl (ENDWHILE :: buffer) (cnt - 1)
-          | hd :: tl -> create_buffer tl (hd :: buffer) cnt
-          | [] -> buffer
+          | WHILE :: tl -> strip_while tl (WHILE :: buffer) (cnt + 1)
+          | ENDWHILE :: tl when cnt = 1 -> List.rev buffer, tl
+          | ENDWHILE :: tl -> strip_while tl (ENDWHILE :: buffer) (cnt - 1)
+          | hd :: tl -> strip_while tl (hd :: buffer) cnt
+          | [] -> raise InvalidToken
         ) in
-        let rec store_while (stack : token list) (buffer : token list) = (
-          match stack with
-          | SEQ :: tl
-          | NEWLINE :: tl -> (
-            let stmts = create_buffer tl [] 1 in
-            let fst_stmts = List.append (List.hd stack :: buffer) stmts in
-            back tl fst_stmts
-          )
-          | hd :: tl -> store_while tl (hd :: buffer)
-          | [] -> []
-        ) in
-        store_while stack []
+        strip_while stack [] 1
       ) in
       let store_fun (input : token list) = (
         let rec parse_args (input : token list) (output : string list) (counter : int) = (
@@ -587,12 +563,19 @@ module Interpreter = struct
         vars
       )
       | WHILE :: tl -> (
-        let expr, tl = rpn (LET :: NAME "_EVAL_" :: tl) [] [] in
-        let vars = eval_rpn expr vars [] in
-        match List.assoc "_EVAL_" vars with
-        | BOOL true -> iterate (copy_while input) vars funs
-        | BOOL false -> iterate (strip_while tl 1) vars funs
-        | _ -> raise InvalidToken
+        let cond, stack = rpn (LET :: NAME "_EVAL_" :: tl) [] [] in
+        let copy, stack = copy_while stack in
+        let rec loop (vars : (string * token) list) = (
+          let vars = eval_rpn cond vars [] in
+          match List.assoc "_EVAL_" vars with
+          | BOOL true -> (
+            let vars = iterate copy vars funs in
+            loop vars
+          )
+          | BOOL false -> iterate stack vars funs
+          | _ -> raise InvalidToken
+        ) in
+        loop vars
       )
       | ENDWHILE :: input
       | ENDIF :: input ->
