@@ -251,10 +251,10 @@ module Interpreter = struct
               match args, stack with
               | n :: tl, v :: stack ->
                 assign tl stack ((n, v) :: (List.remove_assoc n vars))
-              | [], _ -> vars
+              | [], _ -> vars, stack
               | _ -> print_endline "Invalid function evaluation!"; raise InvalidFunction
             ) in
-            let fn_vars = assign args stack vars in
+            let fn_vars, stack = assign args stack vars in
             let res_vars = iterate sequence fn_vars funs in
             if List.mem_assoc "_RETURN_" res_vars then
               eval_rpn input vars ((List.assoc "_RETURN_" res_vars) :: stack)
