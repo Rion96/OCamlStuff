@@ -1,0 +1,21 @@
+# For interpreter.ml
+FUN FAC I
+    IF I > 1
+        RETURN I * FAC (I - 1)
+    ELSE
+        RETURN I
+    ENDIF
+ENDFUN
+
+FUN TAIL I ACC
+    IF I > 1
+        RETURN TAIL (I - 1) (I * ACC)
+    ELSE
+        RETURN ACC
+    ENDIF
+ENDFUN
+
+PRINT "5! calculated using recursion: "
+PRINTLN FAC 5
+PRINT "5! calculated using tail recursion: "
+PRINTLN TAIL 5 1
