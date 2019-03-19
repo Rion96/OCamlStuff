@@ -5,7 +5,7 @@ FUN PRINTARRAY
     WHILE I < N
         PRINT X[I]
         PRINT " "
-        LET I (I + 1)
+        I++
     ENDWHILE
     PRINTLN ""
 ENDFUN
@@ -17,7 +17,7 @@ FUN BUBBLE
             IF X[I] > X[I + 1]
                 RETURN TRUE
             ENDIF
-            LET I (I + 1)
+            I++
         ENDWHILE
         RETURN FALSE
     ENDFUN
@@ -29,7 +29,7 @@ FUN BUBBLE
                 LET X[I + 1] X[I]
                 LET X[I] TMP
             ENDIF
-            LET I (I + 1)
+            I++
         ENDWHILE
     ENDWHILE
     PRINTARRAY

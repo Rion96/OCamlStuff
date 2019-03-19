@@ -9,10 +9,10 @@ module Interpreter = struct
     | CHAR of char
     | STR of string
     | ARRAY of token array | ARR | DREF
-    | LET | PRINT | PRINTLN
+    | LET | PRINT | PRINTLN | POSTFIX_INCR | POSTFIX_DECR
     | IF | ELSE | ENDIF | WHILE | ENDWHILE
     | NEWLINE | ERROR | LIST of token list | SEQ | RETURN
-    | UNOP_MINUS | NOT | POW
+    | UNOP_MINUS | NOT | POW | PREFIX_INCR | PREFIX_DECR
     | PLUS | MINUS | MULT | DIV | MOD
     | START | END | BR_START | BR_END
     | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
@@ -29,8 +29,8 @@ module Interpreter = struct
           let higher_order (op : token) (stack_op : token) = (
             let get_lvl (op : token) = (
               match op with
-              | DREF | FUN _ -> 0
-              | UNOP_MINUS | NOT | POW -> 1
+              | DREF | FUN _ | POSTFIX_DECR | POSTFIX_INCR -> 0
+              | UNOP_MINUS | NOT | POW | PREFIX_DECR | PREFIX_INCR -> 1
               | MULT | DIV | MOD -> 2
               | PLUS | MINUS -> 3
               | LESS | LEQ | GREATER | GEQ -> 4
@@ -244,6 +244,114 @@ module Interpreter = struct
               eval_rpn input ((n, arr) :: (List.remove_assoc n vars)) stack
             )
             | stack -> raise (InvalidToken (LIST stack, "at LET"))
+          )
+          | PREFIX_INCR -> (
+            match stack with
+            | ARR :: INT i :: NAME n :: stack -> (
+              let arr = List.assoc n vars in
+              match arr with
+              | ARRAY arr -> (
+                let v = arr.(i) in
+                match v with
+                | INT j -> (
+                  let v = INT (j + 1) in
+                  arr.(i) <- v;
+                  eval_rpn input vars (v :: stack)
+                )
+                | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
+              )
+              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
+            )
+            | NAME n :: stack -> (
+              let v = List.assoc n vars in
+              match v with
+              | INT i ->
+                let v = INT (i + 1) in
+                eval_rpn input ((n, v) :: (List.remove_assoc n vars)) (v :: stack)
+              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR"))
+            )
+            | stack -> raise (InvalidToken (LIST stack, "at PREFIX_INCR"))
+          )
+          | PREFIX_DECR -> (
+            match stack with
+            | ARR :: INT i :: NAME n :: stack -> (
+              let arr = List.assoc n vars in
+              match arr with
+              | ARRAY arr -> (
+                let v = arr.(i) in
+                match v with
+                | INT j -> (
+                  let v = INT (j - 1) in
+                  arr.(i) <- v;
+                  eval_rpn input vars (v :: stack)
+                )
+                | tok -> raise (InvalidToken (tok, "at PREFIX_DECR (array)"))
+              )
+              | tok -> raise (InvalidToken (tok, "at PREFIX_DECR (array)"))
+            )
+            | NAME n :: stack -> (
+              let v = List.assoc n vars in
+              match v with
+              | INT i ->
+                let v = INT (i - 1) in
+                eval_rpn input ((n, v) :: (List.remove_assoc n vars)) (v :: stack)
+              | tok -> raise (InvalidToken (tok, "at PREFIX_DECR"))
+            )
+            | stack -> raise (InvalidToken (LIST stack, "at PREFIX_DECR"))
+          )
+          | POSTFIX_INCR -> (
+            match stack with
+            | ARR :: INT i :: NAME n :: stack -> (
+              let arr = List.assoc n vars in
+              match arr with
+              | ARRAY arr -> (
+                let v = arr.(i) in
+                match v with
+                | INT j -> (
+                  let v = INT (j + 1) in
+                  arr.(i) <- v;
+                  eval_rpn input vars (INT j :: stack)
+                )
+                | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
+              )
+              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
+            )
+            | NAME n :: stack -> (
+              let v = List.assoc n vars in
+              match v with
+              | INT i ->
+                let v = INT (i + 1) in
+                eval_rpn input ((n, v) :: (List.remove_assoc n vars)) (INT i :: stack)
+              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR"))
+            )
+            | stack -> raise (InvalidToken (LIST stack, "at PREFIX_INCR"))
+          )
+          | POSTFIX_DECR -> (
+            match stack with
+            | ARR :: INT i :: NAME n :: stack -> (
+              let arr = List.assoc n vars in
+              match arr with
+              | ARRAY arr -> (
+                let v = arr.(i) in
+                match v with
+                | INT j -> (
+                  let v = INT (j - 1) in
+                  arr.(i) <- v;
+                  eval_rpn input vars (INT j :: stack)
+                )
+                | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
+              )
+              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
+            )
+            | NAME n :: stack -> (
+              let v = List.assoc n vars in
+              match v with
+              | INT i ->
+                let v = INT (i - 1) in
+                eval_rpn input ((n, v) :: (List.remove_assoc n vars)) (INT i :: stack)
+              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR"))
+            )
+            | stack -> raise (InvalidToken (LIST stack, "at PREFIX_INCR"))
           )
           | DREF -> (
             let stack = dref stack 1 in
@@ -737,6 +845,11 @@ module Interpreter = struct
       | ' ' | '\n' | ';' | '\t' | '(' | '[' -> true
       | _ -> false
     ) in
+    let postfix (c : char) = (
+      match c with
+      | 'A'..'Z' | ']' -> true
+      | _ -> false
+    ) in
     let rec main_parser (buffer : token list) = (
       function
       | ';' :: stack ->
@@ -749,9 +862,19 @@ module Interpreter = struct
         main_parser (BR_START :: buffer) stack
       | ')' :: stack ->
         main_parser (END :: buffer) stack
+      | '+' :: '+' :: [] -> (PREFIX_INCR :: buffer)
+      | '+' :: '+' :: c :: tl when sep c ->
+        main_parser (PREFIX_INCR :: buffer) (c :: tl)
+      | '+' :: '+' :: c :: tl when postfix c ->
+        main_parser (POSTFIX_INCR :: buffer) (c :: tl)
       | '(' :: stack
       | '+' :: '(' :: stack ->
         main_parser (START :: buffer) stack
+      | '-' :: '-' :: [] -> (PREFIX_DECR :: buffer)
+      | '-' :: '-' :: c :: tl when sep c ->
+        main_parser (PREFIX_DECR :: buffer) (c :: tl)
+      | '-' :: '-' :: c :: tl when postfix c ->
+        main_parser (POSTFIX_DECR :: buffer) (c :: tl)
       | '-' :: '(' :: stack ->
         main_parser (START :: UNOP_MINUS :: buffer) stack
       | '-' :: stack ->
@@ -793,45 +916,59 @@ module Interpreter = struct
         let tok, stack = str_token "" stack in
         main_parser (tok :: buffer) stack
       (* PRINTLN *)
+      | 'N' :: 'L' :: 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: [] -> (PRINTLN :: buffer)
       | 'N' :: 'L' :: 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: c :: tl when sep c->
         main_parser (PRINTLN :: buffer) (c :: tl)
       (* PRINT *)
+      | 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: [] -> (PRINT :: buffer)
       | 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: c :: tl when sep c ->
         main_parser (PRINT :: buffer) (c :: tl)
       (* LET *)
+      | 'T' :: 'E' :: 'L' :: [] -> (LET :: buffer)
       | 'T' :: 'E' :: 'L' :: c :: tl when sep c ->
         main_parser (LET :: buffer) (c :: tl)
       (* TRUE *)
+      | 'E' :: 'U' :: 'R' :: 'T' :: [] -> (BOOL true :: buffer)
       | 'E' :: 'U' :: 'R' :: 'T' :: c :: tl when sep c ->
         main_parser (BOOL true :: buffer) (c :: tl)
       (* FALSE *)
+      | 'E' :: 'S' :: 'L' :: 'A' :: 'F' :: [] -> (BOOL false :: buffer)
       | 'E' :: 'S' :: 'L' :: 'A' :: 'F' :: c :: tl when sep c->
         main_parser (BOOL false :: buffer) (c :: tl)
       (* ENDIF *)
+      | 'F' :: 'I' :: 'D' :: 'N' :: 'E' :: [] -> (ENDIF :: buffer)
       | 'F' :: 'I' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c ->
         main_parser (ENDIF :: buffer) (c :: tl)
       (* IF *)
+      | 'F' :: 'I' :: [] -> (IF :: buffer)
       | 'F' :: 'I' :: c :: tl when sep c ->
         main_parser (IF :: buffer) (c :: tl)
       (* ELSE *)
+      | 'E' :: 'S' :: 'L' :: 'E' :: [] -> (ELSE :: buffer)
       | 'E' :: 'S' :: 'L' :: 'E' :: c :: tl when sep c ->
         main_parser (ELSE :: buffer) (c :: tl)
       (* ENDWHILE *)
+      | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: 'D' :: 'N' :: 'E' :: [] -> (ENDWHILE :: buffer)
       | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c ->
         main_parser (ENDWHILE :: buffer) (c :: tl)
       (* WHILE *)
+      | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: [] -> (WHILE :: buffer)
       | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: c :: tl when sep c ->
         main_parser (WHILE :: buffer) (c :: tl) 
       (* ENDFUN *)
+      | 'N' :: 'U' :: 'F' :: 'D' :: 'N' :: 'E' :: [] -> (ENDFUN :: buffer)
       | 'N' :: 'U' :: 'F' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c->
         main_parser (ENDFUN :: buffer) (c :: tl)
       (* FUN *)
+      | 'N' :: 'U' :: 'F' :: [] -> (FUN "_DEF_" :: buffer)
       | 'N' :: 'U' :: 'F' :: c :: tl when sep c ->
         main_parser (FUN "_DEF_" :: buffer) (c :: tl)
       (* RETURN *)
+      | 'N' :: 'R' :: 'U' :: 'T' :: 'E' :: 'R' :: [] -> (RETURN :: buffer)
       | 'N' :: 'R' :: 'U' :: 'T' :: 'E' :: 'R' :: c :: tl when sep c ->
         main_parser (RETURN :: buffer) (c :: tl)
       (* ARR *)
+      | 'R' :: 'R' :: 'A' :: [] -> (ARR :: buffer)
       | 'R' :: 'R' :: 'A' :: c :: tl when sep c ->
         main_parser (ARR :: buffer) (c :: tl)
       | '\'' :: c :: '\'' :: tl ->
