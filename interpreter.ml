@@ -188,6 +188,8 @@ module Interpreter = struct
                 | ARRAY a -> (
                   loop stack (a.(i) :: buffer) (index + 1)
                 )
+                | STR s ->
+                  loop stack (CHAR (s.[i]) :: buffer) (index + 1)
                 | tok -> raise (InvalidToken (tok, "at dref (array)"))
               )
               | ARR :: INT i :: STR s :: stack -> (
