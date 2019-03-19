@@ -8,7 +8,7 @@ module Interpreter = struct
     | BOOL of bool
     | CHAR of char
     | STR of string
-    | ARRAY of token array | ARR
+    | ARRAY of token array | ARR | DREF
     | LET | PRINT | PRINTLN
     | IF | ELSE | ENDIF | WHILE | ENDWHILE
     | NEWLINE | ERROR | LIST of token list | SEQ | RETURN
@@ -29,7 +29,7 @@ module Interpreter = struct
           let higher_order (op : token) (stack_op : token) = (
             let get_lvl (op : token) = (
               match op with
-              | ARR | FUN _ -> 0
+              | DREF | FUN _ -> 0
               | UNOP_MINUS | NOT | POW -> 1
               | MULT | DIV | MOD -> 2
               | PLUS | MINUS -> 3
@@ -50,7 +50,7 @@ module Interpreter = struct
             match op, stack_op with
             (* Special cases with parentheses and brackets *)
             | BR_END, BR_START ->
-              tl, (ARR :: output)
+              tl, (ARR :: DREF :: output)
             | END, START ->
               tl, output
             | BR_END, _
@@ -182,10 +182,6 @@ module Interpreter = struct
           let rec loop (stack : token list) (buffer : token list) (index : int) = (
             if index < n then (
               match stack with
-              | NAME a :: stack -> (
-                let elem = List.assoc a vars in
-                loop stack (elem :: buffer) (index + 1)
-              )
               | ARR :: INT i :: NAME n :: stack -> (
                 let arr = List.assoc n vars in
                 match arr with
@@ -196,6 +192,10 @@ module Interpreter = struct
               )
               | ARR :: INT i :: STR s :: stack -> (
                 loop stack (CHAR (s.[i]) :: buffer) (index + 1)
+              )
+              | NAME a :: stack -> (
+                let elem = List.assoc a vars in
+                loop stack (elem :: buffer) (index + 1)
               )
               | _ :: tl -> (
                 let elem = List.hd stack in
@@ -242,6 +242,10 @@ module Interpreter = struct
               eval_rpn input ((n, arr) :: (List.remove_assoc n vars)) stack
             )
             | stack -> raise (InvalidToken (LIST stack, "at LET"))
+          )
+          | DREF -> (
+            let stack = dref stack 1 in
+            eval_rpn input vars stack
           )
           | FUN n -> (
             let argc, args, sequence = List.assoc n funs in

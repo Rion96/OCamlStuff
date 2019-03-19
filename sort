@@ -1,6 +1,6 @@
 # Bubble sort for interpreter.ml
 
-FUN PRINTARR
+FUN PA
     LET I 0
     WHILE I < N
         PRINT X[I]
@@ -32,15 +32,17 @@ FUN BUBBLE
             LET I (I + 1)
         ENDWHILE
     ENDWHILE
-    PRINTARR
+    PA
 ENDFUN
 
 LET N 16
 LET I 0
+LET X ARR N
+
 WHILE I < N
     LET X[I] (N - I)
     LET I (I + 1)
 ENDWHILE
 
-PRINTARR
+PA
 BUBBLE

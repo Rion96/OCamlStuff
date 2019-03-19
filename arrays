@@ -1,5 +1,6 @@
 # Testing array implementation
 LET CNT 0
+LET X ARR 10
 
 WHILE CNT < 10
     LET X[CNT] CNT
@@ -8,6 +9,6 @@ ENDWHILE
 
 LET CNT 1
 WHILE CNT <= 10
-    PRINT X[CNT - 1]
+    PRINTLN X[CNT - 1]
     LET CNT CNT + 1
 ENDWHILE
