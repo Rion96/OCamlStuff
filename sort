@@ -1,6 +1,6 @@
 # Bubble sort for interpreter.ml
 
-FUN PA
+FUN PRINTARRAY
     LET I 0
     WHILE I < N
         PRINT X[I]
@@ -11,7 +11,7 @@ FUN PA
 ENDFUN
 
 FUN BUBBLE
-    FUN VERI
+    FUN VERIF
         LET I 0
         WHILE I < (N - 1)
             IF X[I] > X[I + 1]
@@ -21,7 +21,7 @@ FUN BUBBLE
         ENDWHILE
         RETURN FALSE
     ENDFUN
-    WHILE VERI
+    WHILE VERIF
         LET I 0
         WHILE I < (N - 1)
             IF X[I] > X[I + 1]
@@ -32,7 +32,7 @@ FUN BUBBLE
             LET I (I + 1)
         ENDWHILE
     ENDWHILE
-    PA
+    PRINTARRAY
 ENDFUN
 
 LET N 16
@@ -44,5 +44,5 @@ WHILE I < N
     LET I (I + 1)
 ENDWHILE
 
-PA
+PRINTARRAY
 BUBBLE

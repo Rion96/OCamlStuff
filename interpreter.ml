@@ -732,6 +732,11 @@ module Interpreter = struct
         ERROR, []
       )
     ) in
+    let sep (c : char) = (
+      match c with
+      | ' ' | '\n' | ';' | '\t' | '(' | '[' -> true
+      | _ -> false
+    ) in
     let rec main_parser (buffer : token list) = (
       function
       | ';' :: stack ->
@@ -788,47 +793,47 @@ module Interpreter = struct
         let tok, stack = str_token "" stack in
         main_parser (tok :: buffer) stack
       (* PRINTLN *)
-      | 'N' :: 'L' :: 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: tl ->
-        main_parser (PRINTLN :: buffer) tl
+      | 'N' :: 'L' :: 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: c :: tl when sep c->
+        main_parser (PRINTLN :: buffer) (c :: tl)
       (* PRINT *)
-      | 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: tl ->
-        main_parser (PRINT :: buffer) tl
+      | 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: c :: tl when sep c ->
+        main_parser (PRINT :: buffer) (c :: tl)
       (* LET *)
-      | 'T' :: 'E' :: 'L' :: tl ->
-        main_parser (LET :: buffer) tl
+      | 'T' :: 'E' :: 'L' :: c :: tl when sep c ->
+        main_parser (LET :: buffer) (c :: tl)
       (* TRUE *)
-      | 'E' :: 'U' :: 'R' :: 'T' :: tl ->
-        main_parser (BOOL true :: buffer) tl
+      | 'E' :: 'U' :: 'R' :: 'T' :: c :: tl when sep c ->
+        main_parser (BOOL true :: buffer) (c :: tl)
       (* FALSE *)
-      | 'E' :: 'S' :: 'L' :: 'A' :: 'F' :: tl ->
-        main_parser (BOOL false :: buffer) tl
+      | 'E' :: 'S' :: 'L' :: 'A' :: 'F' :: c :: tl when sep c->
+        main_parser (BOOL false :: buffer) (c :: tl)
       (* ENDIF *)
-      | 'F' :: 'I' :: 'D' :: 'N' :: 'E' :: tl ->
-        main_parser (ENDIF :: buffer) tl
+      | 'F' :: 'I' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c ->
+        main_parser (ENDIF :: buffer) (c :: tl)
       (* IF *)
-      | 'F' :: 'I' :: tl ->
-        main_parser (IF :: buffer) tl
+      | 'F' :: 'I' :: c :: tl when sep c ->
+        main_parser (IF :: buffer) (c :: tl)
       (* ELSE *)
-      | 'E' :: 'S' :: 'L' :: 'E' :: tl ->
-        main_parser (ELSE :: buffer) tl
+      | 'E' :: 'S' :: 'L' :: 'E' :: c :: tl when sep c ->
+        main_parser (ELSE :: buffer) (c :: tl)
       (* ENDWHILE *)
-      | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: 'D' :: 'N' :: 'E' :: tl ->
-        main_parser (ENDWHILE :: buffer) tl
+      | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c ->
+        main_parser (ENDWHILE :: buffer) (c :: tl)
       (* WHILE *)
-      | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: tl ->
-        main_parser (WHILE :: buffer) tl 
+      | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: c :: tl when sep c ->
+        main_parser (WHILE :: buffer) (c :: tl) 
       (* ENDFUN *)
-      | 'N' :: 'U' :: 'F' :: 'D' :: 'N' :: 'E' :: tl ->
-        main_parser (ENDFUN :: buffer) tl
+      | 'N' :: 'U' :: 'F' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c->
+        main_parser (ENDFUN :: buffer) (c :: tl)
       (* FUN *)
-      | 'N' :: 'U' :: 'F' :: tl ->
-        main_parser (FUN "_DEF_" :: buffer) tl
+      | 'N' :: 'U' :: 'F' :: c :: tl when sep c ->
+        main_parser (FUN "_DEF_" :: buffer) (c :: tl)
       (* RETURN *)
-      | 'N' :: 'R' :: 'U' :: 'T' :: 'E' :: 'R' :: tl ->
-        main_parser (RETURN :: buffer) tl
+      | 'N' :: 'R' :: 'U' :: 'T' :: 'E' :: 'R' :: c :: tl when sep c ->
+        main_parser (RETURN :: buffer) (c :: tl)
       (* ARR *)
-      | 'R' :: 'R' :: 'A' :: tl ->
-        main_parser (ARR :: buffer) tl
+      | 'R' :: 'R' :: 'A' :: c :: tl when sep c ->
+        main_parser (ARR :: buffer) (c :: tl)
       | '\'' :: c :: '\'' :: tl ->
         main_parser (CHAR c :: buffer) tl
       | '.' :: c :: stack when c >= '0' && c <= '9' ->
