@@ -29,7 +29,7 @@ module Interpreter = struct
           let higher_order (op : token) (stack_op : token) = (
             let get_lvl (op : token) = (
               match op with
-              | DREF | FUN _ | POSTFIX_DECR | POSTFIX_INCR -> 0
+              | FUN _ | POSTFIX_DECR | POSTFIX_INCR -> 0
               | UNOP_MINUS | NOT | POW | PREFIX_DECR | PREFIX_INCR -> 1
               | MULT | DIV | MOD -> 2
               | PLUS | MINUS -> 3
@@ -50,7 +50,7 @@ module Interpreter = struct
             match op, stack_op with
             (* Special cases with parentheses and brackets *)
             | BR_END, BR_START ->
-              tl, (ARR :: DREF :: output)
+              tl, (DREF :: output)
             | END, START ->
               tl, output
             | BR_END, _
@@ -86,7 +86,7 @@ module Interpreter = struct
         | INT _ :: tl 
         | FLOAT _ :: tl
         | BOOL _ :: tl 
-        | CHAR _ :: tl
+        | CHAR _ :: tl 
         | ARR :: tl ->
           let elem = List.hd input in
           rpn tl stack (elem :: output)
@@ -182,18 +182,9 @@ module Interpreter = struct
           let rec loop (stack : token list) (buffer : token list) (index : int) = (
             if index < n then (
               match stack with
-              | ARR :: INT i :: NAME n :: stack -> (
-                let arr = List.assoc n vars in
-                match arr with
-                | ARRAY a -> (
-                  loop stack (a.(i) :: buffer) (index + 1)
-                )
-                | STR s ->
-                  loop stack (CHAR (s.[i]) :: buffer) (index + 1)
-                | tok -> raise (InvalidToken (tok, "at dref (array)"))
-              )
-              | ARR :: INT i :: STR s :: stack -> (
-                loop stack (CHAR (s.[i]) :: buffer) (index + 1)
+              | INT i :: ARRAY a :: stack -> (
+                let elem = a.(i) in
+                loop stack (elem :: buffer) (index + 1)
               )
               | NAME a :: stack -> (
                 let elem = List.assoc a vars in
@@ -230,14 +221,9 @@ module Interpreter = struct
             | v :: NAME n :: stack -> (
               eval_rpn input ((n, v) :: (List.remove_assoc n vars)) stack
             )
-            | v :: ARR :: INT i :: NAME n :: stack -> (
-              let arr = List.assoc n vars in
-              match arr with
-              | ARRAY a -> (
-                a.(i) <- v;
-                eval_rpn input vars stack
-              )
-              | tok -> raise (InvalidToken (tok, "at LET (array)"))
+            | v :: INT i :: ARRAY a :: stack -> (
+              a.(i) <- v;
+              eval_rpn input vars stack
             )
             | INT i :: ARR :: NAME n :: stack -> (
               let arr = ARRAY (Array.make i (INT 0)) in
@@ -247,20 +233,15 @@ module Interpreter = struct
           )
           | PREFIX_INCR -> (
             match stack with
-            | ARR :: INT i :: NAME n :: stack -> (
-              let arr = List.assoc n vars in
-              match arr with
-              | ARRAY arr -> (
-                let v = arr.(i) in
+            | INT i :: ARRAY a :: stack -> (
+              let v = a.(i) in
                 match v with
                 | INT j -> (
                   let v = INT (j + 1) in
-                  arr.(i) <- v;
+                  a.(i) <- v;
                   eval_rpn input vars (v :: stack)
                 )
                 | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
-              )
-              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
             )
             | NAME n :: stack -> (
               let v = List.assoc n vars in
@@ -274,20 +255,15 @@ module Interpreter = struct
           )
           | PREFIX_DECR -> (
             match stack with
-            | ARR :: INT i :: NAME n :: stack -> (
-              let arr = List.assoc n vars in
-              match arr with
-              | ARRAY arr -> (
-                let v = arr.(i) in
+            | INT i :: ARRAY a :: stack -> (
+              let v = a.(i) in
                 match v with
                 | INT j -> (
                   let v = INT (j - 1) in
-                  arr.(i) <- v;
+                  a.(i) <- v;
                   eval_rpn input vars (v :: stack)
                 )
                 | tok -> raise (InvalidToken (tok, "at PREFIX_DECR (array)"))
-              )
-              | tok -> raise (InvalidToken (tok, "at PREFIX_DECR (array)"))
             )
             | NAME n :: stack -> (
               let v = List.assoc n vars in
@@ -301,20 +277,15 @@ module Interpreter = struct
           )
           | POSTFIX_INCR -> (
             match stack with
-            | ARR :: INT i :: NAME n :: stack -> (
-              let arr = List.assoc n vars in
-              match arr with
-              | ARRAY arr -> (
-                let v = arr.(i) in
+            | INT i :: ARRAY a :: stack -> (
+              let v = a.(i) in
                 match v with
                 | INT j -> (
                   let v = INT (j + 1) in
-                  arr.(i) <- v;
+                  a.(i) <- v;
                   eval_rpn input vars (INT j :: stack)
                 )
                 | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
-              )
-              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
             )
             | NAME n :: stack -> (
               let v = List.assoc n vars in
@@ -328,20 +299,15 @@ module Interpreter = struct
           )
           | POSTFIX_DECR -> (
             match stack with
-            | ARR :: INT i :: NAME n :: stack -> (
-              let arr = List.assoc n vars in
-              match arr with
-              | ARRAY arr -> (
-                let v = arr.(i) in
+            | INT i :: ARRAY a :: stack -> (
+              let v = a.(i) in
                 match v with
                 | INT j -> (
                   let v = INT (j - 1) in
-                  arr.(i) <- v;
+                  a.(i) <- v;
                   eval_rpn input vars (INT j :: stack)
                 )
-                | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
-              )
-              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
+                | tok -> raise (InvalidToken (tok, "at POSTFIX_DECR (array)"))
             )
             | NAME n :: stack -> (
               let v = List.assoc n vars in
@@ -355,7 +321,18 @@ module Interpreter = struct
           )
           | DREF -> (
             let stack = dref stack 1 in
-            eval_rpn input vars stack
+            match stack with
+            | INT i :: NAME n :: stack -> (
+              match List.assoc n vars with
+              | ARRAY a ->
+                eval_rpn input vars (INT i :: ARRAY a :: stack)
+              | STR s ->
+                eval_rpn input vars (CHAR s.[i] :: stack)
+              | tok -> raise (InvalidToken (tok, "at DREF"))
+            )
+            | INT i :: STR s :: stack ->
+              eval_rpn input vars (CHAR s.[i] :: stack)
+            | stack -> raise (InvalidToken (LIST stack, "at DREF"))
           )
           | FUN n -> (
             let argc, args, sequence = List.assoc n funs in
