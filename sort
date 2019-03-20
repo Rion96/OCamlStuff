@@ -1,6 +1,7 @@
 # Bubble sort for interpreter.ml
 
-FUN PRINTARRAY A N
+FUN PRINTARRAY A
+    LET N LEN A
     FOR LET I 0; I < N; I++
         PRINT A[I]
         PRINT " "
@@ -8,8 +9,9 @@ FUN PRINTARRAY A N
     PRINTLN ""
 ENDFUN
 
-FUN BUBBLE A N
-    FUN VERIF A N
+FUN BUBBLE A
+    FUN VERIF A
+        LET N LEN A
         FOR LET I 0; I < (N - 1); I++
             IF A[I] > A[I + 1]
                 RETURN FALSE
@@ -17,7 +19,8 @@ FUN BUBBLE A N
         ENDFOR
         RETURN TRUE
     ENDFUN
-    WHILE !(VERIF A N)
+    LET N LEN A
+    WHILE !(VERIF A)
         FOR LET I 0; I < (N - 1); I++
             IF A[I] > A[I + 1]
                 LET TMP A[I + 1]
@@ -28,13 +31,14 @@ FUN BUBBLE A N
     ENDWHILE
 ENDFUN
 
-LET N 16
+PRINT "How many elements? "
+SCAN INT N
 LET X ARR N
 
 FOR LET I 0; I < N; I++
-    LET X[I] (N - I)
+    LET X[I] RAND 100
 ENDFOR
 
-PRINTARRAY X N
-BUBBLE X N
-PRINTARRAY X N
+PRINTARRAY X
+BUBBLE X
+PRINTARRAY X

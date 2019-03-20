@@ -14,7 +14,7 @@ module Interpreter = struct
     | NEWLINE | ERROR | LIST of token list | SEQ | RETURN
     | UNOP_MINUS | NOT | POW | PREFIX_INCR | PREFIX_DECR
     | PLUS | MINUS | MULT | DIV | MOD | SCAN | LEN
-    | START | END | BR_START | BR_END | BREAK
+    | START | END | BR_START | BR_END | BREAK | RAND
     | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
 
   exception InvalidToken of (token * string)
@@ -30,7 +30,8 @@ module Interpreter = struct
             let get_lvl (op : token) = (
               match op with
               | FUN _ | POSTFIX_DECR | POSTFIX_INCR -> 0
-              | LEN | UNOP_MINUS | NOT | POW | PREFIX_DECR | PREFIX_INCR -> 1
+              | LEN | RAND | UNOP_MINUS | NOT 
+              | POW | PREFIX_DECR | PREFIX_INCR -> 1
               | MULT | DIV | MOD -> 2
               | PLUS | MINUS -> 3
               | LESS | LEQ | GREATER | GEQ -> 4
@@ -767,6 +768,13 @@ module Interpreter = struct
               eval_rpn input vars ((INT (Array.length a)) :: stack)
             | stack -> raise (InvalidToken (LIST stack, "at LEN"))
           )
+          | RAND -> (
+            let stack = dref stack 1 in
+            match stack with
+            | INT i :: stack ->
+              eval_rpn input vars (INT (Random.int i) :: stack)
+            | stack -> raise (InvalidToken (LIST stack, "at RAND"))
+          )
           | op -> raise (InvalidToken (op, "at eval_rpn"))
         )
         | [] -> (
@@ -1064,6 +1072,10 @@ module Interpreter = struct
       | 'N' :: 'E' :: 'L' :: [] -> (LEN :: buffer)
       | 'N' :: 'E' :: 'L' :: c :: tl when sep c ->
         main_parser (LEN :: buffer) (c :: tl)
+      (* RAND *)
+      | 'D' :: 'N' :: 'A' :: 'R' :: [] -> (RAND :: buffer)
+      | 'D' :: 'N' :: 'A' :: 'R' :: c :: tl when sep c ->
+        main_parser (RAND :: buffer) (c :: tl)
       | '\'' :: c :: '\'' :: tl ->
         main_parser (CHAR c :: buffer) tl
       | '.' :: c :: stack when c >= '0' && c <= '9' ->
@@ -1078,6 +1090,7 @@ module Interpreter = struct
       | [] ->
         buffer
     ) in
+    Random.self_init ();
     main_parser [] stack
   )
 
