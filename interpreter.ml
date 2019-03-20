@@ -14,7 +14,7 @@ module Interpreter = struct
     | NEWLINE | ERROR | LIST of token list | SEQ | RETURN
     | UNOP_MINUS | NOT | POW | PREFIX_INCR | PREFIX_DECR
     | PLUS | MINUS | MULT | DIV | MOD
-    | START | END | BR_START | BR_END
+    | START | END | BR_START | BR_END | BREAK
     | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
 
   exception InvalidToken of (token * string)
@@ -740,21 +740,25 @@ module Interpreter = struct
         let vars = eval_rpn expr vars [] in
         vars
       )
+      | BREAK :: input -> (
+        (("_BREAK_", BREAK) :: (List.remove_assoc "_BREAK_" vars))
+      )
       | WHILE :: tl -> (
         let cond, stack = rpn (LET :: NAME "_EVAL_" :: tl) [] [] in
         let copy, stack = copy_while stack in
         let rec loop (vars : (string * token) list) = (
           let vars = eval_rpn cond vars [] in
-          match List.assoc "_EVAL_" vars with
-          | BOOL true -> (
+          match List.assoc "_EVAL_" vars, List.mem_assoc "_BREAK_" vars with
+          | BOOL true, false -> (
             let vars = iterate copy vars funs in
             if List.mem_assoc "_RETURN_" vars then
               vars
             else
               loop vars
           )
-          | BOOL false -> iterate stack vars funs
-          | eval -> raise (InvalidToken (eval, "at WHILE"))
+          | _, true -> iterate stack (List.remove_assoc "_BREAK_" vars) funs
+          | BOOL false, _ -> iterate stack vars funs
+          | eval, _ -> raise (InvalidToken (eval, "at WHILE"))
         ) in
         loop vars
       )
@@ -766,16 +770,17 @@ module Interpreter = struct
         let copy, stack = copy_for stack in
         let rec loop (vars : (string * token) list) = (
           let vars = eval_rpn cond vars [] in
-          match List.assoc "_EVAL_" vars with
-          | BOOL true -> (
+          match List.assoc "_EVAL_" vars, List.mem_assoc "_BREAK_" vars with
+          | BOOL true, false -> (
             let vars = iterate copy vars funs in
             if List.mem_assoc "_RETURN_" vars then
               vars
             else
               loop (eval_rpn term vars [])
           )
-          | BOOL false -> iterate stack vars funs
-          | eval -> raise (InvalidToken (eval, "at FOR"))
+          | _, true -> iterate stack (List.remove_assoc "_BREAK_" vars) funs
+          | BOOL false, _ -> iterate stack vars funs
+          | eval, _ -> raise (InvalidToken (eval, "at FOR"))
         ) in
         loop vars
       )
@@ -996,7 +1001,11 @@ module Interpreter = struct
       (* FOR *)
       | 'R' :: 'O' :: 'F' :: [] -> (FOR :: buffer)
       | 'R' :: 'O' :: 'F' :: c :: tl when sep c ->
-        main_parser  (FOR :: buffer) (c :: tl)
+        main_parser (FOR :: buffer) (c :: tl)
+      (* BREAK *)
+      | 'K' :: 'A' :: 'E' :: 'R' :: 'B' :: [] -> (BREAK :: buffer)
+      | 'K' :: 'A' :: 'E' :: 'R' :: 'B' :: c :: tl when sep c ->
+        main_parser (BREAK :: buffer) (c :: tl)
       | '\'' :: c :: '\'' :: tl ->
         main_parser (CHAR c :: buffer) tl
       | '.' :: c :: stack when c >= '0' && c <= '9' ->
