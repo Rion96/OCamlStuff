@@ -1,0 +1,10 @@
+# Testing SCAN and STRLEN
+
+PRINT "What is your name? "
+SCAN STR N
+PRINTLN "Hello " + N + "!"
+PRINTLN "Your name is " + STRLEN N + " characters long!"
+SCAN FLOAT F
+PRINTLN "1 / " + F + " = " + (1 / F)
+SCAN INT I
+PRINTLN "You entered: " + I

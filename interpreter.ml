@@ -13,7 +13,7 @@ module Interpreter = struct
     | IF | ELSE | ENDIF | WHILE | ENDWHILE | FOR | ENDFOR
     | NEWLINE | ERROR | LIST of token list | SEQ | RETURN
     | UNOP_MINUS | NOT | POW | PREFIX_INCR | PREFIX_DECR
-    | PLUS | MINUS | MULT | DIV | MOD
+    | PLUS | MINUS | MULT | DIV | MOD | SCAN | STRLEN
     | START | END | BR_START | BR_END | BREAK
     | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
 
@@ -30,14 +30,14 @@ module Interpreter = struct
             let get_lvl (op : token) = (
               match op with
               | FUN _ | POSTFIX_DECR | POSTFIX_INCR -> 0
-              | UNOP_MINUS | NOT | POW | PREFIX_DECR | PREFIX_INCR -> 1
+              | STRLEN | UNOP_MINUS | NOT | POW | PREFIX_DECR | PREFIX_INCR -> 1
               | MULT | DIV | MOD -> 2
               | PLUS | MINUS -> 3
               | LESS | LEQ | GREATER | GEQ -> 4
               | NEQ | EQ -> 5
               | AND -> 6
               | OR -> 7
-              | LET | PRINT | PRINTLN | RETURN -> 8
+              | LET | PRINT | PRINTLN | RETURN | SCAN -> 8
               | tok -> raise (InvalidToken (tok, "at higher_order"))
             ) in
             let op, stack_op = get_lvl op, get_lvl stack_op in
@@ -246,6 +246,42 @@ module Interpreter = struct
               eval_rpn input vars stack
             )
             | stack -> raise (InvalidToken (LIST stack, "at LET"))
+          )
+          | SCAN -> (
+            match stack with
+            | NAME n :: NAME t :: stack -> (
+              match t with
+              | "INT" -> (
+                let v = read_int () in
+                eval_rpn input ((n, INT v) :: (List.remove_assoc n vars)) stack
+              )
+              | "STR" -> (
+                let v = read_line () in
+                eval_rpn input ((n, STR v) :: (List.remove_assoc n vars)) stack
+              )
+              | "FLOAT" -> (
+                let v = Scanf.scanf "%f" (fun v -> v) in
+                eval_rpn input ((n, FLOAT v) :: (List.remove_assoc n vars)) stack
+              )
+              | _ -> raise (InvalidToken (NAME t, "at SCAN"))
+            )
+            | INT i :: ARRAY a :: NAME t :: stack -> (
+              match t with
+              | "INT" -> (
+                let v = read_int () in
+                a.(i) <- INT v; eval_rpn input vars stack
+              )
+              | "STR" -> (
+                let v = read_line () in
+                a.(i) <- STR v; eval_rpn input vars stack
+              )
+              | "FLOAT" -> (
+                let v = Scanf.scanf "%f" (fun v -> v) in
+                a.(i) <- FLOAT v; eval_rpn input vars stack
+              )
+              | _ -> raise (InvalidToken (NAME t, "at SCAN"))
+            )
+            | stack -> raise (InvalidToken (LIST stack, "at SCAN"))
           )
           | PREFIX_INCR -> (
             match stack with
@@ -717,6 +753,13 @@ module Interpreter = struct
               eval_rpn input vars ((FLOAT (a ** b)) :: stack)
             | stack -> raise (InvalidToken (LIST stack, "at POW"))
           )
+          | STRLEN -> (
+            let stack = dref stack 1 in
+            match stack with
+            | STR s :: stack ->
+              eval_rpn input vars ((INT (String.length s)) :: stack)
+            | stack -> raise (InvalidToken (LIST stack, "at STRLEN"))
+          )
           | op -> raise (InvalidToken (op, "at eval_rpn"))
         )
         | [] -> (
@@ -1006,6 +1049,14 @@ module Interpreter = struct
       | 'K' :: 'A' :: 'E' :: 'R' :: 'B' :: [] -> (BREAK :: buffer)
       | 'K' :: 'A' :: 'E' :: 'R' :: 'B' :: c :: tl when sep c ->
         main_parser (BREAK :: buffer) (c :: tl)
+      (* SCAN *)
+      | 'N' :: 'A' :: 'C' :: 'S' :: [] -> (SCAN :: buffer)
+      | 'N' :: 'A' :: 'C' :: 'S' :: c :: tl when sep c ->
+        main_parser (SCAN :: buffer) (c :: tl)
+      (* STRLEN *)
+      | 'N' :: 'E' :: 'L' :: 'R' :: 'T' :: 'S' :: [] -> (STRLEN :: buffer)
+      | 'N' :: 'E' :: 'L' :: 'R' :: 'T' :: 'S' :: c :: tl when sep c ->
+        main_parser (STRLEN :: buffer) (c :: tl)
       | '\'' :: c :: '\'' :: tl ->
         main_parser (CHAR c :: buffer) tl
       | '.' :: c :: stack when c >= '0' && c <= '9' ->
