@@ -376,7 +376,12 @@ module Interpreter = struct
             match stack with
             | INT i :: INT j :: ARRAY a :: stack -> (
               let elem = a.(j) in
-              eval_rpn input vars (INT i :: elem :: stack)
+              match elem with
+              | ARRAY _ ->
+                eval_rpn input vars (INT i :: elem :: stack)
+              | STR s ->
+                eval_rpn input vars (CHAR s.[i] :: stack)
+              | tok -> raise (InvalidToken (tok, "at DREF"))
             )
             | INT i :: NAME n :: stack -> (
               match List.assoc n vars with
