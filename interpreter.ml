@@ -10,7 +10,7 @@ module Interpreter = struct
     | STR of string
     | ARRAY of token array | ARR | DREF
     | LET | PRINT | PRINTLN | POSTFIX_INCR | POSTFIX_DECR
-    | IF | ELSE | ENDIF | WHILE | ENDWHILE
+    | IF | ELSE | ENDIF | WHILE | ENDWHILE | FOR | ENDFOR
     | NEWLINE | ERROR | LIST of token list | SEQ | RETURN
     | UNOP_MINUS | NOT | POW | PREFIX_INCR | PREFIX_DECR
     | PLUS | MINUS | MULT | DIV | MOD
@@ -148,6 +148,17 @@ module Interpreter = struct
         ) in
         strip_while stack [] 1
       ) in
+      let copy_for (stack : token list) = (
+        let rec strip_for (stack : token list) (buffer : token list) (cnt : int) = (
+          match stack with
+          | FOR :: tl -> strip_for tl (FOR :: buffer) (cnt + 1)
+          | ENDFOR :: tl when cnt = 1 -> List.rev buffer, tl
+          | ENDFOR :: tl -> strip_for tl (ENDFOR :: buffer) (cnt - 1)
+          | hd :: tl -> strip_for tl (hd :: buffer) cnt
+          | [] -> raise (InvalidToken (LIST [], "at copy_for"))
+        ) in
+        strip_for stack [] 1
+      ) in
       let store_fun (input : token list) = (
         let rec parse_args (input : token list) (output : string list) (counter : int) = (
           match input with
@@ -225,9 +236,14 @@ module Interpreter = struct
               a.(i) <- v;
               eval_rpn input vars stack
             )
-            | INT i :: ARR :: NAME n :: stack -> (
-              let arr = ARRAY (Array.make i (INT 0)) in
+            | INT size :: ARR :: NAME n :: stack -> (
+              let arr = ARRAY (Array.make size (INT 0)) in
               eval_rpn input ((n, arr) :: (List.remove_assoc n vars)) stack
+            )
+            | INT size :: ARR :: INT i :: ARRAY a :: stack -> (
+              let arr = ARRAY (Array.make size (INT 0)) in
+              a.(i) <- arr;
+              eval_rpn input vars stack
             )
             | stack -> raise (InvalidToken (LIST stack, "at LET"))
           )
@@ -285,7 +301,7 @@ module Interpreter = struct
                   a.(i) <- v;
                   eval_rpn input vars (INT j :: stack)
                 )
-                | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
+                | tok -> raise (InvalidToken (tok, "at POSTFIX_INCR (array)"))
             )
             | NAME n :: stack -> (
               let v = List.assoc n vars in
@@ -293,9 +309,9 @@ module Interpreter = struct
               | INT i ->
                 let v = INT (i + 1) in
                 eval_rpn input ((n, v) :: (List.remove_assoc n vars)) (INT i :: stack)
-              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR"))
+              | tok -> raise (InvalidToken (tok, "at POSTFIX_INCR"))
             )
-            | stack -> raise (InvalidToken (LIST stack, "at PREFIX_INCR"))
+            | stack -> raise (InvalidToken (LIST stack, "at POSTFIX_INCR"))
           )
           | POSTFIX_DECR -> (
             match stack with
@@ -315,13 +331,17 @@ module Interpreter = struct
               | INT i ->
                 let v = INT (i - 1) in
                 eval_rpn input ((n, v) :: (List.remove_assoc n vars)) (INT i :: stack)
-              | tok -> raise (InvalidToken (tok, "at PREFIX_INCR"))
+              | tok -> raise (InvalidToken (tok, "at POSTFIX_DECR"))
             )
-            | stack -> raise (InvalidToken (LIST stack, "at PREFIX_INCR"))
+            | stack -> raise (InvalidToken (LIST stack, "at POSTFIX_DECR"))
           )
           | DREF -> (
             let stack = dref stack 1 in
             match stack with
+            | INT i :: INT j :: ARRAY a :: stack -> (
+              let elem = a.(j) in
+              eval_rpn input vars (INT i :: elem :: stack)
+            )
             | INT i :: NAME n :: stack -> (
               match List.assoc n vars with
               | ARRAY a ->
@@ -738,6 +758,27 @@ module Interpreter = struct
         ) in
         loop vars
       )
+      | FOR :: tl -> (
+        let expr, stack = rpn tl [] [] in
+        let vars = eval_rpn expr vars [] in
+        let cond, stack = rpn (LET :: NAME "_EVAL_" :: (List.tl stack)) [] [] in
+        let term, stack = rpn (List.tl stack) [] [] in
+        let copy, stack = copy_for stack in
+        let rec loop (vars : (string * token) list) = (
+          let vars = eval_rpn cond vars [] in
+          match List.assoc "_EVAL_" vars with
+          | BOOL true -> (
+            let vars = iterate copy vars funs in
+            if List.mem_assoc "_RETURN_" vars then
+              vars
+            else
+              loop (eval_rpn term vars [])
+          )
+          | BOOL false -> iterate stack vars funs
+          | eval -> raise (InvalidToken (eval, "at FOR"))
+        ) in
+        loop vars
+      )
       | ENDWHILE :: input
       | ENDIF :: input ->
         iterate input (List.remove_assoc "_EVAL_" vars) funs
@@ -948,6 +989,14 @@ module Interpreter = struct
       | 'R' :: 'R' :: 'A' :: [] -> (ARR :: buffer)
       | 'R' :: 'R' :: 'A' :: c :: tl when sep c ->
         main_parser (ARR :: buffer) (c :: tl)
+      (* ENDFOR *)
+      | 'R' :: 'O' :: 'F' :: 'D' :: 'N' :: 'E' :: [] -> (ENDFOR :: buffer)
+      | 'R' :: 'O' :: 'F' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c ->
+        main_parser (ENDFOR :: buffer) (c :: tl)
+      (* FOR *)
+      | 'R' :: 'O' :: 'F' :: [] -> (FOR :: buffer)
+      | 'R' :: 'O' :: 'F' :: c :: tl when sep c ->
+        main_parser  (FOR :: buffer) (c :: tl)
       | '\'' :: c :: '\'' :: tl ->
         main_parser (CHAR c :: buffer) tl
       | '.' :: c :: stack when c >= '0' && c <= '9' ->
