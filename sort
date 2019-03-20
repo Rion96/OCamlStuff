@@ -1,48 +1,40 @@
 # Bubble sort for interpreter.ml
 
-FUN PRINTARRAY
-    LET I 0
-    WHILE I < N
-        PRINT X[I]
+FUN PRINTARRAY A N
+    FOR LET I 0; I < N; I++
+        PRINT A[I]
         PRINT " "
-        I++
-    ENDWHILE
+    ENDFOR
     PRINTLN ""
 ENDFUN
 
-FUN BUBBLE
-    FUN VERIF
-        LET I 0
-        WHILE I < (N - 1)
-            IF X[I] > X[I + 1]
-                RETURN TRUE
+FUN BUBBLE A N
+    FUN VERIF A N
+        FOR LET I 0; I < (N - 1); I++
+            IF A[I] > A[I + 1]
+                RETURN FALSE
             ENDIF
-            I++
-        ENDWHILE
-        RETURN FALSE
+        ENDFOR
+        RETURN TRUE
     ENDFUN
-    WHILE VERIF
-        LET I 0
-        WHILE I < (N - 1)
-            IF X[I] > X[I + 1]
-                LET TMP X[I + 1]
-                LET X[I + 1] X[I]
-                LET X[I] TMP
+    WHILE !(VERIF A N)
+        FOR LET I 0; I < (N - 1); I++
+            IF A[I] > A[I + 1]
+                LET TMP A[I + 1]
+                LET A[I + 1] A[I]
+                LET A[I] TMP
             ENDIF
-            I++
-        ENDWHILE
+        ENDFOR
     ENDWHILE
-    PRINTARRAY
 ENDFUN
 
 LET N 16
-LET I 0
 LET X ARR N
 
-WHILE I < N
+FOR LET I 0; I < N; I++
     LET X[I] (N - I)
-    LET I (I + 1)
-ENDWHILE
+ENDFOR
 
-PRINTARRAY
-BUBBLE
+PRINTARRAY X N
+BUBBLE X N
+PRINTARRAY X N
