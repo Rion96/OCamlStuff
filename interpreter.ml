@@ -360,11 +360,11 @@ module Interpreter = struct
             let rec assign (args : string list) (stack : token list) (vars : (string * token) list) = (
               match args, stack with
               | n :: tl, v :: stack ->
-                assign tl stack ((n, v) :: (List.remove_assoc n vars))
+                assign tl stack ((n, v) :: vars)
               | [], _ -> vars, stack
               | _ -> raise (InvalidFunction "at assign")
             ) in
-            let fn_vars, stack = assign args stack vars in
+            let fn_vars, stack = assign args stack [] in
             let res_vars = iterate sequence fn_vars funs in
             if List.mem_assoc "_RETURN_" res_vars then
               eval_rpn input vars ((List.assoc "_RETURN_" res_vars) :: stack)
