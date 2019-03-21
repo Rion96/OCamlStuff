@@ -787,6 +787,7 @@ module Interpreter = struct
         iterate input vars funs
       )
     ) in
+    Random.self_init ();
     iterate tokens [] []
   )
 
@@ -1009,7 +1010,6 @@ module Interpreter = struct
       | [] ->
         buffer
     ) in
-    Random.self_init ();
     main_parser [] stack
   )
 
