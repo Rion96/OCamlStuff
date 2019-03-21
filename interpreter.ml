@@ -95,15 +95,13 @@ module Interpreter = struct
       ) in
       let strip_if (stack : token list) = (
         let rec loop (stack : token list) (cnt : int) = (
-          if cnt > 0 then
-            match stack with
-            | IF :: stack -> loop stack (cnt + 1)
-            | ELSE :: stack when cnt = 1 -> stack
-            | ENDIF :: stack -> loop stack (cnt - 1)
-            | _ :: stack -> loop stack cnt
-            | [] -> []
-          else
-            stack
+          match stack with
+          | IF :: stack -> loop stack (cnt + 1)
+          | ELSE :: stack when cnt = 1 -> stack
+          | ENDIF :: stack when cnt = 1 -> stack
+          | ENDIF :: stack -> loop stack (cnt - 1)
+          | _ :: stack -> loop stack cnt
+          | [] -> []
         ) in
         loop stack 1
       ) in
@@ -189,7 +187,8 @@ module Interpreter = struct
                 let elem = a.(i) in
                 loop stack (elem :: buffer) (index + 1)
               | NAME a :: stack ->
-                let elem = List.assoc a vars in
+                let elem = try List.assoc a vars
+                with Not_found -> raise (InvalidToken (NAME a, "at dref")) in
                 loop stack (elem :: buffer) (index + 1)
               | _ :: tl ->
                 let elem = List.hd stack in
@@ -272,7 +271,8 @@ module Interpreter = struct
               | tok -> raise (InvalidToken (tok, "at PREFIX_INCR (array)"))
             )
             | NAME n :: stack -> (
-              let v = List.assoc n vars in
+              let v = try List.assoc n vars
+              with Not_found -> raise (InvalidToken (NAME n, "at PREFIX_INCR")) in
               match v with
               | INT i ->
                 let v = INT (i + 1) in
@@ -292,7 +292,8 @@ module Interpreter = struct
                 | tok -> raise (InvalidToken (tok, "at PREFIX_DECR (array)"))
             )
             | NAME n :: stack -> (
-              let v = List.assoc n vars in
+              let v = try List.assoc n vars
+              with Not_found -> raise (InvalidToken (NAME n, "at PREFIX_DECR")) in
               match v with
               | INT i ->
                 let v = INT (i - 1) in
@@ -312,7 +313,8 @@ module Interpreter = struct
                 | tok -> raise (InvalidToken (tok, "at POSTFIX_INCR (array)"))
             )
             | NAME n :: stack -> (
-              let v = List.assoc n vars in
+              let v = try List.assoc n vars
+              with Not_found -> raise (InvalidToken (NAME n, "at POSTFIX_INCR")) in
               match v with
               | INT i ->
                 let v = INT (i + 1) in
@@ -332,7 +334,8 @@ module Interpreter = struct
                 | tok -> raise (InvalidToken (tok, "at POSTFIX_DECR (array)"))
             )
             | NAME n :: stack -> (
-              let v = List.assoc n vars in
+              let v = try List.assoc n vars
+              with Not_found -> raise (InvalidToken (NAME n, "at POSTFIX_DECR")) in
               match v with
               | INT i ->
                 let v = INT (i - 1) in
@@ -354,7 +357,9 @@ module Interpreter = struct
               | tok -> raise (InvalidToken (tok, "at DREF"))
             )
             | INT i :: NAME n :: stack -> (
-              match List.assoc n vars with
+              let v = try List.assoc n vars
+              with Not_found -> raise (InvalidToken (NAME n, "at DREF")) in
+              match v with
               | ARRAY a ->
                 eval_rpn input vars (INT i :: ARRAY a :: stack)
               | STR s ->
@@ -366,7 +371,8 @@ module Interpreter = struct
             | stack -> raise (InvalidToken (LIST stack, "at DREF"))
           )
           | FUN n -> (
-            let argc, args, sequence = List.assoc n funs in
+            let argc, args, sequence = try List.assoc n funs 
+            with Not_found -> raise (InvalidToken (FUN n, "at FUN")) in
             let stack = dref stack argc in
             let rec assign (args : string list) (stack : token list) (vars : (string * token) list) = (
               match args, stack with
@@ -723,7 +729,9 @@ module Interpreter = struct
       | IF :: input -> (
         let expr, input = rpn (LET :: NAME "_EVAL_" :: input) [] [] in
         let vars = eval_rpn expr vars [] in
-        match List.assoc "_EVAL_" vars with
+        let ret = try List.assoc "_EVAL_" vars
+        with Not_found -> raise (InvalidToken (NAME "_EVAL_", "at IF")) in
+        match ret with
         | BOOL true -> iterate (strip_else input) vars funs
         | BOOL false -> iterate (strip_if input) vars funs
         | eval -> raise (InvalidToken (eval, "at IF"))
@@ -741,7 +749,9 @@ module Interpreter = struct
         let copy, stack = copy_while stack in
         let rec loop (vars : (string * token) list) = (
           let vars = eval_rpn cond vars [] in
-          match List.assoc "_EVAL_" vars, List.mem_assoc "_BREAK_" vars with
+          let ret = try List.assoc "_EVAL_" vars
+          with Not_found -> raise (InvalidToken (NAME "_EVAL_", "at WHILE")) in
+          match ret, List.mem_assoc "_BREAK_" vars with
           | BOOL true, false ->
             let vars = iterate copy vars funs in
             if List.mem_assoc "_RETURN_" vars then
@@ -762,7 +772,9 @@ module Interpreter = struct
         let copy, stack = copy_for stack in
         let rec loop (vars : (string * token) list) = (
           let vars = eval_rpn cond vars [] in
-          match List.assoc "_EVAL_" vars, List.mem_assoc "_BREAK_" vars with
+          let ret = try List.assoc "_EVAL_" vars
+          with Not_found -> raise (InvalidToken (NAME "_EVAL_", "at FOR")) in
+          match ret, List.mem_assoc "_BREAK_" vars with
           | BOOL true, false ->
             let vars = iterate copy vars funs in
             if List.mem_assoc "_RETURN_" vars then
@@ -1015,10 +1027,9 @@ module Interpreter = struct
 
   let char_stack (f : in_channel) = (
     let rec loop stack = (
-      try
-        let c = input_char f in
-        loop (c :: stack)
-      with End_of_file -> stack
+      match input_char f with
+      | c -> loop (c :: stack)
+      | exception End_of_file -> stack
     ) in
     loop []
   )
