@@ -6,13 +6,15 @@ type token =
   | BOOL of bool
   | CHAR of char
   | STR of string
+  | INCHAN of in_channel | OPENIN | CLOSE | CATCH | THROW
+  | OUTCHAN of out_channel | OPENOUT | READ | WRITE
   | ARRAY of token array | ARR | DREF | FLOOR | CEIL
   | LET | PRINT | PRINTLN | POSTFIX_INCR | POSTFIX_DECR
   | IF | ELSE | ENDIF | WHILE | ENDWHILE | FOR | ENDFOR
   | NEWLINE | ERROR | LIST of token list | SEQ | RETURN
   | UNOP_MINUS | NOT | POW | PREFIX_INCR | PREFIX_DECR
   | PLUS | MINUS | MULT | DIV | MOD | SCAN | LEN | INCLUDE
-  | START | END | BR_START | BR_END | BREAK | RAND
+  | START | END | BR_START | BR_END | BREAK | RAND | TONUM
   | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
 
 exception InvalidToken of (token * string)
@@ -42,6 +44,8 @@ let tokenizer (stack : char list) = (
   let rec str_token (buffer : string) = (
     function
     | '"' :: stack -> STR buffer, stack
+    | 'n' :: '\\' :: tl -> str_token ((String.make 1 '\n') ^ buffer) tl
+    | 't' :: '\\' :: tl -> str_token ((String.make 1 '\t') ^ buffer) tl
     | hd :: tl -> str_token ((String.make 1 hd) ^ buffer) tl
     | [] -> ERROR, []
   ) in
@@ -228,6 +232,38 @@ let tokenizer (stack : char list) = (
     | 'E' :: 'D' :: 'U' :: 'L' :: 'C' :: 'N' :: 'I' :: [] -> (INCLUDE :: buffer)
     | 'E' :: 'D' :: 'U' :: 'L' :: 'C' :: 'N' :: 'I' :: c :: tl when sep c ->
       main_parser (INCLUDE :: buffer) (c :: tl)
+    (* TONUM *)
+    | 'M' :: 'U' :: 'N' :: 'O' :: 'T' :: [] -> (TONUM :: buffer)
+    | 'M' :: 'U' :: 'N' :: 'O' :: 'T' :: c :: tl when sep c ->
+      main_parser (TONUM :: buffer) (c :: tl)
+    (* OPENIN *)
+    | 'N' :: 'I' :: 'N' :: 'E' :: 'P' :: 'O' :: [] -> (OPENIN :: buffer)
+    | 'N' :: 'I' :: 'N' :: 'E' :: 'P' :: 'O' :: c :: tl when sep c ->
+      main_parser (OPENIN :: buffer) (c :: tl)
+    (* OPENOUT *)
+    | 'T' :: 'U' :: 'O' :: 'N' :: 'E' :: 'P' :: 'O' :: [] -> (OPENOUT :: buffer)
+    | 'T' :: 'U' :: 'O' :: 'N' :: 'E' :: 'P' :: 'O' :: c :: tl when sep c ->
+      main_parser (OPENOUT :: buffer) (c :: tl)
+    (* CLOSE *)
+    | 'E' :: 'S' :: 'O' :: 'L' :: 'C' :: [] -> (CLOSE :: buffer)
+    | 'E' :: 'S' :: 'O' :: 'L' :: 'C' :: c :: tl when sep c ->
+      main_parser (CLOSE :: buffer) (c :: tl)
+    (* READ *)
+    | 'D' :: 'A' :: 'E' :: 'R' :: [] -> (READ :: buffer)
+    | 'D' :: 'A' :: 'E' :: 'R' :: c :: tl when sep c ->
+      main_parser (READ :: buffer) (c :: tl)
+    (* WRITE *)
+    | 'E' :: 'T' :: 'I' :: 'R' :: 'W' :: [] -> (WRITE :: buffer)
+    | 'E' :: 'T' :: 'I' :: 'R' :: 'W' :: c :: tl when sep c ->
+      main_parser (WRITE :: buffer) (c :: tl)
+    (* THROW *)
+    | 'W' :: 'O' :: 'R' :: 'H' :: 'T' :: [] -> (THROW :: buffer)
+    | 'W' :: 'O' :: 'R' :: 'H' :: 'T' :: c :: tl when sep c ->
+      main_parser (THROW :: buffer) (c :: tl)
+    (* CATCH *)
+    | 'H' :: 'C' :: 'T' :: 'A' :: 'C' :: [] -> (CATCH :: buffer)
+    | 'H' :: 'C' :: 'T' :: 'A' :: 'C' :: c :: tl when sep c ->
+      main_parser (CATCH :: buffer) (c :: tl)
     | '\'' :: c :: '\'' :: tl ->
       main_parser (CHAR c :: buffer) tl
     | '.' :: c :: stack when c >= '0' && c <= '9' ->
@@ -264,8 +300,8 @@ let interpreter (tokens : token list) = (
           let get_lvl (op : token) = (
             match op with
             | FUN _ | POSTFIX_DECR | POSTFIX_INCR -> 0
-            | LEN | RAND | UNOP_MINUS 
-            | NOT | FLOOR | CEIL
+            | LEN | RAND | UNOP_MINUS | OPENIN | CLOSE | READ
+            | NOT | FLOOR | CEIL | TONUM | OPENOUT | CATCH
             | POW | PREFIX_DECR | PREFIX_INCR -> 1
             | MULT | DIV | MOD -> 2
             | PLUS | MINUS -> 3
@@ -273,7 +309,8 @@ let interpreter (tokens : token list) = (
             | NEQ | EQ -> 5
             | AND -> 6
             | OR -> 7
-            | LET | PRINT | PRINTLN | RETURN | SCAN -> 8
+            | LET | PRINT | PRINTLN | RETURN
+            | SCAN | WRITE | THROW -> 8
             | tok -> raise (InvalidToken (tok, "at higher_order"))
           ) in
           let op, stack_op = get_lvl op, get_lvl stack_op in
@@ -424,9 +461,8 @@ let interpreter (tokens : token list) = (
               let elem = try List.assoc a vars
               with Not_found -> raise (InvalidToken (NAME a, "at dref")) in
               loop stack (elem :: buffer) (index + 1)
-            | _ :: tl ->
-              let elem = List.hd stack in
-              loop tl (elem :: buffer) (index + 1)
+            | hd :: tl ->
+              loop tl (hd :: buffer) (index + 1)
             | stack -> raise (InvalidToken (LIST stack, "at dref"))
           else
             match buffer with
@@ -451,16 +487,16 @@ let interpreter (tokens : token list) = (
           let stack = dref stack 1 in
           match stack with
           | v :: NAME n :: stack ->
-            eval_rpn input ((n, v) :: (List.remove_assoc n vars)) stack
+            eval_rpn input ((n, v) :: (List.remove_assoc n vars)) (v :: stack)
           | v :: INT i :: ARRAY a :: stack ->
             a.(i) <- v;
-            eval_rpn input vars stack
+            eval_rpn input vars (v :: stack)
           | INT size :: ARR :: NAME n :: stack ->
             let arr = ARRAY (Array.make size (INT 0)) in
-            eval_rpn input ((n, arr) :: (List.remove_assoc n vars)) stack
+            eval_rpn input ((n, arr) :: (List.remove_assoc n vars)) (arr :: stack)
           | INT size :: ARR :: INT i :: ARRAY a :: stack ->
             let arr = ARRAY (Array.make size (INT 0)) in
-            a.(i) <- arr; eval_rpn input vars stack
+            a.(i) <- arr; eval_rpn input vars (arr :: stack)
           | stack -> raise (InvalidToken (LIST stack, "at LET"))
         )
         | SCAN -> (
@@ -950,6 +986,89 @@ let interpreter (tokens : token list) = (
             eval_rpn input vars (INT (int_of_float (ceil f)) :: stack)
           | stack -> raise (InvalidToken (LIST stack, "at CEIL"))
         )
+        | TONUM -> (
+          let stack = dref stack 1 in
+          match stack with
+          | INT _ :: _ | FLOAT _ :: _ ->
+            eval_rpn input vars stack
+          | CHAR c :: stack ->
+            eval_rpn input vars (INT (Char.code c) :: stack)
+          | STR s :: stack ->
+            let num = try INT (int_of_string s)
+            with e -> try FLOAT (float_of_string s)
+            with e -> raise (InvalidToken (STR s, "at TONUM")) in
+            eval_rpn input vars (num :: stack)
+          | stack -> raise (InvalidToken (LIST stack, "at TONUM"))
+        )
+        | OPENIN -> (
+          let stack = dref stack 1 in
+          match stack with
+          | STR n :: stack ->
+          let file = try open_in n
+          with e -> raise (InvalidFilename n) in
+          eval_rpn input vars (INCHAN file :: stack)
+          | stack -> raise (InvalidToken (LIST stack, "at OPENIN"))
+        )
+        | OPENOUT -> (
+          let stack = dref stack 1 in
+          match stack with
+          | STR n :: stack ->
+          let file = try open_out n
+          with e -> raise (InvalidFilename n) in
+          eval_rpn input vars (OUTCHAN file :: stack)
+          | stack -> raise (InvalidToken (LIST stack, "at OPENOUT"))
+        )
+        | CLOSE -> (
+          let stack = dref stack 1 in
+          match stack with
+          | INCHAN c :: stack ->
+            close_in c; eval_rpn input vars stack
+          | OUTCHAN c :: stack ->
+            close_out c; eval_rpn input vars stack
+          | stack -> raise (InvalidToken (LIST stack, "at CLOSE"))
+        )
+        | CATCH -> (
+          let stack = dref stack 1 in
+          match stack with
+          | ERROR :: stack -> eval_rpn input vars (BOOL true :: stack)
+          | _ :: stack -> eval_rpn input vars (BOOL false :: stack)
+          | stack -> raise (InvalidToken (LIST stack, "at CATCH"))
+        )
+        | READ -> (
+          let stack = dref stack 1 in
+          match stack with
+          | INCHAN c :: NAME t :: stack -> (
+            match t with
+            | "STR" -> (
+              match input_line c with
+              | s -> (eval_rpn [@tailcall]) input vars (STR s :: stack)
+              | exception e -> (eval_rpn [@tailcall]) input vars (ERROR :: stack)
+            )
+            | "CHAR" -> (
+              match input_char c with
+              | c -> (eval_rpn [@tailcall]) input vars (CHAR c :: stack)
+              | exception e -> (eval_rpn [@tailcall]) input vars (ERROR :: stack)
+            )
+            | _ -> raise (InvalidToken (NAME t, "at READ"))
+          )
+          | stack -> raise (InvalidToken (LIST stack, "at READ"))
+        )
+        | WRITE -> (
+          let stack = dref stack 2 in
+          match stack with
+          | OUTCHAN c :: STR s :: stack ->
+            output_string c s; eval_rpn input vars stack
+          | OUTCHAN c :: CHAR ch :: stack ->
+            output_char c ch; eval_rpn input vars stack
+          | OUTCHAN c :: INT i :: stack ->
+            output_string c (string_of_int i); eval_rpn input vars stack
+          | OUTCHAN c :: FLOAT f :: stack ->
+            output_string c (string_of_float f); eval_rpn input vars stack
+          | stack -> raise (InvalidToken (LIST stack, "at WRITE"))
+        )
+        | THROW -> (
+          raise (InvalidToken (LIST stack, "at THROW"))
+        )
         | op -> raise (InvalidToken (op, "at eval_rpn"))
       )
       | [] -> (
@@ -1042,11 +1161,12 @@ let interpreter (tokens : token list) = (
   iterate tokens [] []
 )
 
-let _ = (
+let () = (
   let file =
   if Array.length Sys.argv > 1 then
     open_in Sys.argv.(1)
   else
     open_in "test" in
-  file |> char_stack |> tokenizer |> interpreter
+  file |> char_stack |> tokenizer |> interpreter |> ignore;
+  close_in file
 )
