@@ -132,14 +132,14 @@ let tokenizer (stack : char list) = (
     | 'r' :: '\\' :: '\'' :: stack -> CHAR '\r', stack
     | 't' :: '\\' :: '\'' :: stack -> CHAR '\t', stack
     | 'b' :: '\\' :: '\'' :: stack -> CHAR '\b', stack
-    | c :: '\'' :: stack -> CHAR 'c', stack
+    | c :: '\'' :: stack -> CHAR c, stack
     | stack -> ERROR, stack
   ) in
   let rec str_token (buffer : string) = (
     function
     | '\\' :: '\\' :: tl -> str_token ((String.make 1 '\\') ^ buffer) tl
     | '\"' :: '\\' :: tl -> str_token ((String.make 1 '\"') ^ buffer) tl
-    | '\'' :: '\\' :: tl -> str_token ((String.make 1 '\"') ^ buffer) tl
+    | '\'' :: '\\' :: tl -> str_token ((String.make 1 '\'') ^ buffer) tl
     | 'n' :: '\\' :: tl -> str_token ((String.make 1 '\n') ^ buffer) tl
     | 'r' :: '\\' :: tl -> str_token ((String.make 1 '\r') ^ buffer) tl
     | 't' :: '\\' :: tl -> str_token ((String.make 1 '\t') ^ buffer) tl
