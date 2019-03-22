@@ -1,11 +1,11 @@
 type token =
   | NAME of string
   | FUN of string | ENDFUN
-  | INT of int
+  | INT of int | TONUM
   | FLOAT of float
   | BOOL of bool
-  | CHAR of char
-  | STR of string
+  | CHAR of char | TOCHAR
+  | STR of string | TOSTR
   | INCHAN of in_channel | OPENIN | CLOSE | CATCH | THROW
   | OUTCHAN of out_channel | OPENOUT | READ | WRITE
   | ARRAY of token array | ARR | DREF | FLOOR | CEIL
@@ -14,7 +14,7 @@ type token =
   | NEWLINE | ERROR | LIST of token list | SEQ | RETURN
   | UNOP_MINUS | NOT | POW | PREFIX_INCR | PREFIX_DECR
   | PLUS | MINUS | MULT | DIV | MOD | SCAN | LEN | INCLUDE
-  | START | END | BR_START | BR_END | BREAK | RAND | TONUM
+  | START | END | BR_START | BR_END | BREAK | RAND 
   | AND | OR | GREATER | LESS | GEQ | LEQ | NEQ | EQ
 
 exception InvalidToken of (token * string)
@@ -264,6 +264,14 @@ let tokenizer (stack : char list) = (
     | 'H' :: 'C' :: 'T' :: 'A' :: 'C' :: [] -> (CATCH :: buffer)
     | 'H' :: 'C' :: 'T' :: 'A' :: 'C' :: c :: tl when sep c ->
       main_parser (CATCH :: buffer) (c :: tl)
+    (* TOCHAR *)
+    | 'R' :: 'A' :: 'H' :: 'C' :: 'O' :: 'T' :: [] -> (TOCHAR :: buffer)
+    | 'R' :: 'A' :: 'H' :: 'C' :: 'O' :: 'T' :: c :: tl when sep c ->
+      main_parser (TOCHAR :: buffer) (c :: tl)
+    (* TOSTR *)
+    | 'R' :: 'T' :: 'S' :: 'O' :: 'T' :: [] -> (TOSTR :: buffer)
+    | 'R' :: 'T' :: 'S' :: 'O' :: 'T' :: c :: tl when sep c ->
+      main_parser (TOSTR :: buffer) (c :: tl)
     | '\'' :: c :: '\'' :: tl ->
       main_parser (CHAR c :: buffer) tl
     | '.' :: c :: stack when c >= '0' && c <= '9' ->
@@ -302,7 +310,8 @@ let interpreter (tokens : token list) = (
             | FUN _ | POSTFIX_DECR | POSTFIX_INCR -> 0
             | LEN | RAND | UNOP_MINUS | OPENIN | CLOSE | READ
             | NOT | FLOOR | CEIL | TONUM | OPENOUT | CATCH
-            | POW | PREFIX_DECR | PREFIX_INCR -> 1
+            | POW | PREFIX_DECR | PREFIX_INCR
+            | TOSTR | TOCHAR -> 1
             | MULT | DIV | MOD -> 2
             | PLUS | MINUS -> 3
             | LESS | LEQ | GREATER | GEQ -> 4
@@ -713,8 +722,8 @@ let interpreter (tokens : token list) = (
           | STR b :: STR a :: stack ->
             eval_rpn input vars ((STR (a ^ b)) :: stack)
           | CHAR b :: CHAR a :: stack ->
-            let a, b = String.make 1 a, String.make 1 b in
-            eval_rpn input vars ((STR (a ^ b)) :: stack)
+            let c = Char.code a + Char.code b in
+            eval_rpn input vars (INT c :: stack)
           | STR b :: INT a :: stack ->
             let a = string_of_int a in
             eval_rpn input vars ((STR (a ^ b)) :: stack)
@@ -733,6 +742,10 @@ let interpreter (tokens : token list) = (
           | CHAR b :: STR a :: stack ->
             let b = String.make 1 b in
             eval_rpn input vars ((STR (a ^ b)) :: stack)
+          | INT i :: CHAR c :: stack
+          | CHAR c :: INT i :: stack ->
+            let c = i + Char.code c in
+            eval_rpn input vars (INT c :: stack)
           | stack -> raise (InvalidToken (LIST stack, "at PLUS"))
         )
         | MINUS -> (
@@ -752,8 +765,8 @@ let interpreter (tokens : token list) = (
             let b = Char.code b in
             eval_rpn input vars ((INT (a - b)) :: stack)
           | INT b :: CHAR a :: stack ->
-            let c = Char.chr (Char.code a - b) in
-            eval_rpn input vars ((CHAR c) :: stack)
+            let a = Char.code a in
+            eval_rpn input vars ((INT (a - b)) :: stack)
           | CHAR b :: CHAR a :: stack ->
             let c = Char.code a - Char.code b in
             eval_rpn input vars (INT c :: stack)
@@ -1068,6 +1081,31 @@ let interpreter (tokens : token list) = (
         )
         | THROW -> (
           raise (InvalidToken (LIST stack, "at THROW"))
+        )
+        | TOCHAR -> (
+          let stack = dref stack 1 in
+          match stack with
+          | INT i :: stack ->
+            eval_rpn input vars (CHAR (Char.chr i) :: stack)
+          | STR s :: stack ->
+            eval_rpn input vars (CHAR (s.[0]) :: stack)
+          | stack -> raise (InvalidToken (LIST stack, "at TOCHAR"))
+        )
+        | TOSTR -> (
+          let stack = dref stack 1 in
+          match stack with
+          | INT i :: stack ->
+            eval_rpn input vars (STR (string_of_int i) :: stack)
+          | FLOAT f :: stack ->
+            eval_rpn input vars (STR (string_of_float f) :: stack)
+          | CHAR c :: stack ->
+            eval_rpn input vars (STR (String.make 1 c) :: stack)
+          | STR _ :: _ ->
+            eval_rpn input vars stack
+          | BOOL b :: stack ->
+            let s = if b then "TRUE" else "FALSE" in
+            eval_rpn input vars (STR s :: stack)
+          | stack -> raise (InvalidToken (LIST stack, "at TOSTR"))
         )
         | op -> raise (InvalidToken (op, "at eval_rpn"))
       )

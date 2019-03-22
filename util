@@ -1,0 +1,29 @@
+# Utility functions for TrashScript
+
+FUN SQRT N; RETURN N ^ .5; ENDFUN
+
+FUN UPPER S
+  LET OUT ""
+  LET N LEN S
+  FOR LET I 0; I < N; I++
+    IF S[I] >= 'a' && S[I] <= 'z'
+      LET OUT (OUT + TOCHAR (S[I] - 32))
+    ELSE
+      LET OUT (OUT + S[I])
+    ENDIF
+  ENDFOR
+  RETURN OUT
+ENDFUN
+
+FUN LOWER S
+  LET OUT ""
+  LET N LEN S
+  FOR LET I 0; I < N; I++
+    IF S[I] >= 'A' && S[I] <= 'Z'
+      LET OUT (OUT + TOCHAR (S[I] + 32))
+    ELSE
+      LET OUT (OUT + S[I])
+    ENDIF
+  ENDFOR
+  RETURN OUT
+ENDFUN
