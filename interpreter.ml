@@ -21,6 +21,88 @@ exception InvalidToken of (token * string)
 exception InvalidFunction of string
 exception InvalidFilename of string
 
+let rec string_of_token (tok : token) = (
+  let print_list (l : token list) = (
+    let rec loop l buf = (
+      match l with
+      | [hd] -> (buf ^ (string_of_token hd))
+      | hd :: tl -> loop tl (buf ^ (string_of_token hd) ^ ", ")
+      | [] -> buf
+    ) in
+    ("[" ^ (loop l "") ^ "]")
+  ) in
+  match tok with
+  | NAME s        -> ("NAME " ^ s)
+  | FUN s         -> ("FUN " ^ s)
+  | ENDFUN        -> "ENDFUN"
+  | INT i         -> ("INT " ^ string_of_int i)
+  | TONUM         -> "TONUM"
+  | FLOAT f       -> ("FLOAT " ^ string_of_float f)
+  | BOOL b        -> ("BOOL " ^ string_of_bool b)
+  | CHAR c        -> ("CHAR " ^ String.make 1 c)
+  | TOCHAR        -> "TOCHAR"
+  | STR s         -> ("STRING " ^ s)
+  | TOSTR         -> "TOSTR"
+  | INCHAN _      -> ("INCHAN")
+  | OPENIN        -> "OPENIN"
+  | CLOSE         -> "CLOSE"
+  | CATCH         -> "CATCH"
+  | THROW         -> "THROW"
+  | OUTCHAN _     -> "OUTCHAN" 
+  | OPENOUT       -> "OPENOUT"
+  | READ          -> "READ"
+  | WRITE         -> "WRITE"
+  | ARRAY _       -> "ARRAY"
+  | ARR           -> "ARR"
+  | DREF          -> "DREF"
+  | FLOOR         -> "FLOOR"
+  | CEIL          -> "CEIL"
+  | LET           -> "LET"
+  | PRINT         -> "PRINT"
+  | PRINTLN       -> "PRINTLN"
+  | POSTFIX_INCR  -> "POSTFIX_INCR"
+  | POSTFIX_DECR  -> "POSTFIX_DECR"
+  | IF            -> "IF"
+  | ELSE          -> "ELSE"
+  | ENDIF         -> "ENDIF"
+  | WHILE         -> "WHILE"
+  | ENDWHILE      -> "ENDWHILE"
+  | FOR           -> "FOR"
+  | ENDFOR        -> "ENDFOR"
+  | NEWLINE       -> "NEWLINE"
+  | ERROR         -> "ERROR"
+  | LIST l        -> ("LIST " ^ (print_list l))
+  | SEQ           -> "SEQ"
+  | RETURN        -> "RETURN"
+  | UNOP_MINUS    -> "UNOP_MINUS"
+  | NOT           -> "NOT"
+  | POW           -> "POW"
+  | PREFIX_INCR   -> "PREFIX_INCR"
+  | PREFIX_DECR   -> "PREFIX_DECR"
+  | PLUS          -> "PLUS"
+  | MINUS         -> "MINUS"
+  | MULT          -> "MULT"
+  | DIV           -> "DIV"
+  | MOD           -> "MOD"
+  | SCAN          -> "SCAN"
+  | LEN           -> "LEN"
+  | INCLUDE       -> "INCLUDE"
+  | START         -> "START"
+  | END           -> "END"
+  | BR_START      -> "BR_START"
+  | BR_END        -> "BR_END"
+  | BREAK         -> "BREAK"
+  | RAND          -> "RAND"
+  | AND           -> "AND"
+  | OR            -> "OR"
+  | GREATER       -> "GREATER"
+  | LESS          -> "LESS"
+  | GEQ           -> "GEQ"
+  | LEQ           -> "LEQ"
+  | NEQ           -> "NEQ"
+  | EQ            -> "EQ"
+)
+
 let tokenizer (stack : char list) = (
   let rec ignore_token = (
     function
@@ -1200,11 +1282,23 @@ let interpreter (tokens : token list) = (
 )
 
 let () = (
-  let file =
-  if Array.length Sys.argv > 1 then
-    open_in Sys.argv.(1)
-  else
-    open_in "test" in
-  file |> char_stack |> tokenizer |> interpreter |> ignore;
-  close_in file
+  if Array.length Sys.argv > 1 then (
+    let file = 
+      try open_in Sys.argv.(1)
+      with e -> (
+        Printf.fprintf stderr "Cannot find file %s.\n" Sys.argv.(1);
+        exit 0
+      ) in
+    let tokens = file |> char_stack |> tokenizer in
+    match interpreter tokens with
+    | exception InvalidToken (tok, s) ->
+      Printf.fprintf stderr "Encountered an exception InvalidToken %s!\nToken: %s\n" s (string_of_token tok); close_in file
+    | exception InvalidFilename s ->
+      Printf.fprintf stderr "Encountered an exception InvalidFilename %s!\n" s; close_in file
+    | exception InvalidFunction s ->
+      Printf.fprintf stderr "Encountered an exception InvalidFunction %s!\n" s; close_in file
+    | exception e ->
+      close_in file; raise e
+    | _ -> close_in file
+  )
 )
