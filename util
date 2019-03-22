@@ -1,4 +1,4 @@
-# Utility functions for TrashScript
+# Utility functions for interpreter.ml
 
 FUN SQRT N; RETURN N ^ .5; ENDFUN
 
