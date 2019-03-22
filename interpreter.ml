@@ -123,11 +123,28 @@ let tokenizer (stack : char list) = (
         with exn ->
           ERROR, stack
   ) in
+  let char_token = (
+    function
+    | '\\' :: '\\' :: '\'' :: stack -> CHAR '\\', stack
+    | '\"' :: '\\' :: '\'' :: stack -> CHAR '\"', stack
+    | '\'' :: '\\' :: '\'' :: stack -> CHAR '\'', stack
+    | 'n' :: '\\' :: '\'' :: stack -> CHAR '\n', stack
+    | 'r' :: '\\' :: '\'' :: stack -> CHAR '\r', stack
+    | 't' :: '\\' :: '\'' :: stack -> CHAR '\t', stack
+    | 'b' :: '\\' :: '\'' :: stack -> CHAR '\b', stack
+    | c :: '\'' :: stack -> CHAR 'c', stack
+    | stack -> ERROR, stack
+  ) in
   let rec str_token (buffer : string) = (
     function
-    | '"' :: stack -> STR buffer, stack
+    | '\\' :: '\\' :: tl -> str_token ((String.make 1 '\\') ^ buffer) tl
+    | '\"' :: '\\' :: tl -> str_token ((String.make 1 '\"') ^ buffer) tl
+    | '\'' :: '\\' :: tl -> str_token ((String.make 1 '\"') ^ buffer) tl
     | 'n' :: '\\' :: tl -> str_token ((String.make 1 '\n') ^ buffer) tl
+    | 'r' :: '\\' :: tl -> str_token ((String.make 1 '\r') ^ buffer) tl
     | 't' :: '\\' :: tl -> str_token ((String.make 1 '\t') ^ buffer) tl
+    | 'b' :: '\\' :: tl -> str_token ((String.make 1 '\b') ^ buffer) tl
+    | '"' :: stack -> STR buffer, stack
     | hd :: tl -> str_token ((String.make 1 hd) ^ buffer) tl
     | [] -> ERROR, []
   ) in
@@ -354,8 +371,9 @@ let tokenizer (stack : char list) = (
     | 'R' :: 'T' :: 'S' :: 'O' :: 'T' :: [] -> (TOSTR :: buffer)
     | 'R' :: 'T' :: 'S' :: 'O' :: 'T' :: c :: tl when sep c ->
       main_parser (TOSTR :: buffer) (c :: tl)
-    | '\'' :: c :: '\'' :: tl ->
-      main_parser (CHAR c :: buffer) tl
+    | '\'' :: tl ->
+      let tok, stack = char_token tl in
+      main_parser (tok :: buffer) stack
     | '.' :: c :: stack when c >= '0' && c <= '9' ->
       let tok, stack = num_token "" ('.' :: c :: stack) in
       main_parser (tok :: buffer) stack
