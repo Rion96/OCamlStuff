@@ -158,7 +158,11 @@ let tokenizer (stack : char list) = (
     | '(' :: _
     | '[' :: _
     | ' ' :: _ -> NAME buffer, input
-    | hd :: tl when hd >= 'A' && hd <= 'Z' ->
+    | '_' :: ('A'..'Z' as c) :: tl
+    | '_' :: ('a'..'z' as c) :: tl ->
+      name_token ((String.make 1 c) ^ "_" ^ buffer) tl
+    | ('A'..'Z' as hd) :: tl
+    | ('a'..'z' as hd) :: tl ->
       name_token ((String.make 1 hd) ^ buffer) tl
     | _ :: stack -> ERROR, stack
     | [] -> ERROR, []
@@ -171,7 +175,7 @@ let tokenizer (stack : char list) = (
   ) in
   let postfix (c : char) = (
     match c with
-    | 'A'..'Z' | ']' -> true
+    | 'A'..'Z' | 'a'..'z' | ']' -> true
     | _ -> false
   ) in
   let rec main_parser (buffer : token list) = (
@@ -239,137 +243,137 @@ let tokenizer (stack : char list) = (
     | '"' :: stack ->
       let tok, stack = str_token "" stack in
       main_parser (tok :: buffer) stack
-    (* PRINTLN *)
-    | 'N' :: 'L' :: 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: [] -> (PRINTLN :: buffer)
-    | 'N' :: 'L' :: 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: c :: tl when sep c->
+    (* println *)
+    | 'n' :: 'l' :: 't' :: 'n' :: 'i' :: 'r' :: 'p' :: [] -> (PRINTLN :: buffer)
+    | 'n' :: 'l' :: 't' :: 'n' :: 'i' :: 'r' :: 'p' :: c :: tl when sep c ->
       main_parser (PRINTLN :: buffer) (c :: tl)
-    (* PRINT *)
-    | 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: [] -> (PRINT :: buffer)
-    | 'T' :: 'N' :: 'I' :: 'R' :: 'P' :: c :: tl when sep c ->
+    (* print *)
+    | 't' :: 'n' :: 'i' :: 'r' :: 'p' :: [] -> (PRINT :: buffer)
+    | 't' :: 'n' :: 'i' :: 'r' :: 'p' :: c :: tl when sep c ->
       main_parser (PRINT :: buffer) (c :: tl)
-    (* LET *)
-    | 'T' :: 'E' :: 'L' :: [] -> (LET :: buffer)
-    | 'T' :: 'E' :: 'L' :: c :: tl when sep c ->
+    (* let *)
+    | 't' :: 'e' :: 'l' :: [] -> (LET :: buffer)
+    | 't' :: 'e' :: 'l' :: c :: tl when sep c ->
       main_parser (LET :: buffer) (c :: tl)
-    (* TRUE *)
-    | 'E' :: 'U' :: 'R' :: 'T' :: [] -> (BOOL true :: buffer)
-    | 'E' :: 'U' :: 'R' :: 'T' :: c :: tl when sep c ->
+    (* true *)
+    | 'e' :: 'u' :: 'r' :: 't' :: [] -> (BOOL true :: buffer)
+    | 'e' :: 'u' :: 'r' :: 't' :: c :: tl when sep c ->
       main_parser (BOOL true :: buffer) (c :: tl)
-    (* FALSE *)
-    | 'E' :: 'S' :: 'L' :: 'A' :: 'F' :: [] -> (BOOL false :: buffer)
-    | 'E' :: 'S' :: 'L' :: 'A' :: 'F' :: c :: tl when sep c->
+    (* false *)
+    | 'e' :: 's' :: 'l' :: 'a' :: 'f' :: [] -> (BOOL false :: buffer)
+    | 'e' :: 's' :: 'l' :: 'a' :: 'f' :: c :: tl when sep c ->
       main_parser (BOOL false :: buffer) (c :: tl)
-    (* ENDIF *)
-    | 'F' :: 'I' :: 'D' :: 'N' :: 'E' :: [] -> (ENDIF :: buffer)
-    | 'F' :: 'I' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c ->
+    (* endif *)
+    | 'f' :: 'i' :: 'd' :: 'n' :: 'e' :: [] -> (ENDIF :: buffer)
+    | 'f' :: 'i' :: 'd' :: 'n' :: 'e' :: c :: tl when sep c ->
       main_parser (ENDIF :: buffer) (c :: tl)
-    (* IF *)
-    | 'F' :: 'I' :: [] -> (IF :: buffer)
-    | 'F' :: 'I' :: c :: tl when sep c ->
+    (* if *)
+    | 'f' :: 'i' :: [] -> (IF :: buffer)
+    | 'f' :: 'i' :: c :: tl when sep c ->
       main_parser (IF :: buffer) (c :: tl)
-    (* ELSE *)
-    | 'E' :: 'S' :: 'L' :: 'E' :: [] -> (ELSE :: buffer)
-    | 'E' :: 'S' :: 'L' :: 'E' :: c :: tl when sep c ->
+    (* else *)
+    | 'e' :: 's' :: 'l' :: 'e' :: [] -> (ELSE :: buffer)
+    | 'e' :: 's' :: 'l' :: 'e' :: c :: tl when sep c ->
       main_parser (ELSE :: buffer) (c :: tl)
-    (* ENDWHILE *)
-    | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: 'D' :: 'N' :: 'E' :: [] -> (ENDWHILE :: buffer)
-    | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c ->
+    (* endwhile *)
+    | 'e' :: 'l' :: 'i' :: 'h' :: 'w' :: 'd' :: 'n' :: 'e' :: [] -> (ENDWHILE :: buffer)
+    | 'e' :: 'l' :: 'i' :: 'h' :: 'w' :: 'd' :: 'n' :: 'e' :: c :: tl when sep c ->
       main_parser (ENDWHILE :: buffer) (c :: tl)
-    (* WHILE *)
-    | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: [] -> (WHILE :: buffer)
-    | 'E' :: 'L' :: 'I' :: 'H' :: 'W' :: c :: tl when sep c ->
+    (* while *)
+    | 'e' :: 'l' :: 'i' :: 'h' :: 'w' :: [] -> (WHILE :: buffer)
+    | 'e' :: 'l' :: 'i' :: 'h' :: 'w' :: c :: tl when sep c ->
       main_parser (WHILE :: buffer) (c :: tl) 
-    (* ENDFUN *)
-    | 'N' :: 'U' :: 'F' :: 'D' :: 'N' :: 'E' :: [] -> (ENDFUN :: buffer)
-    | 'N' :: 'U' :: 'F' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c->
+    (* endfun *)
+    | 'n' :: 'u' :: 'f' :: 'd' :: 'n' :: 'e' :: [] -> (ENDFUN :: buffer)
+    | 'n' :: 'u' :: 'f' :: 'd' :: 'n' :: 'e' :: c :: tl when sep c ->
       main_parser (ENDFUN :: buffer) (c :: tl)
-    (* FUN *)
-    | 'N' :: 'U' :: 'F' :: [] -> (FUN "_DEF_" :: buffer)
-    | 'N' :: 'U' :: 'F' :: c :: tl when sep c ->
+    (* fun *)
+    | 'n' :: 'u' :: 'f' :: [] -> (FUN "_DEF_" :: buffer)
+    | 'n' :: 'u' :: 'f' :: c :: tl when sep c ->
       main_parser (FUN "_DEF_" :: buffer) (c :: tl)
-    (* RETURN *)
-    | 'N' :: 'R' :: 'U' :: 'T' :: 'E' :: 'R' :: [] -> (RETURN :: buffer)
-    | 'N' :: 'R' :: 'U' :: 'T' :: 'E' :: 'R' :: c :: tl when sep c ->
+    (* return *)
+    | 'n' :: 'r' :: 'u' :: 't' :: 'e' :: 'r' :: [] -> (RETURN :: buffer)
+    | 'n' :: 'r' :: 'u' :: 't' :: 'e' :: 'r' :: c :: tl when sep c ->
       main_parser (RETURN :: buffer) (c :: tl)
-    (* ARR *)
-    | 'R' :: 'R' :: 'A' :: [] -> (ARR :: buffer)
-    | 'R' :: 'R' :: 'A' :: c :: tl when sep c ->
+    (* arr *)
+    | 'r' :: 'r' :: 'a' :: [] -> (ARR :: buffer)
+    | 'r' :: 'r' :: 'a' :: c :: tl when sep c ->
       main_parser (ARR :: buffer) (c :: tl)
-    (* ENDFOR *)
-    | 'R' :: 'O' :: 'F' :: 'D' :: 'N' :: 'E' :: [] -> (ENDFOR :: buffer)
-    | 'R' :: 'O' :: 'F' :: 'D' :: 'N' :: 'E' :: c :: tl when sep c ->
+    (* endfor *)
+    | 'r' :: 'o' :: 'f' :: 'd' :: 'n' :: 'e' :: [] -> (ENDFOR :: buffer)
+    | 'r' :: 'o' :: 'f' :: 'd' :: 'n' :: 'e' :: c :: tl when sep c ->
       main_parser (ENDFOR :: buffer) (c :: tl)
-    (* FOR *)
-    | 'R' :: 'O' :: 'F' :: [] -> (FOR :: buffer)
-    | 'R' :: 'O' :: 'F' :: c :: tl when sep c ->
+    (* for *)
+    | 'r' :: 'o' :: 'f' :: [] -> (FOR :: buffer)
+    | 'r' :: 'o' :: 'f' :: c :: tl when sep c ->
       main_parser (FOR :: buffer) (c :: tl)
-    (* BREAK *)
-    | 'K' :: 'A' :: 'E' :: 'R' :: 'B' :: [] -> (BREAK :: buffer)
-    | 'K' :: 'A' :: 'E' :: 'R' :: 'B' :: c :: tl when sep c ->
+    (* break *)
+    | 'k' :: 'a' :: 'e' :: 'r' :: 'b' :: [] -> (BREAK :: buffer)
+    | 'k' :: 'a' :: 'e' :: 'r' :: 'b' :: c :: tl when sep c ->
       main_parser (BREAK :: buffer) (c :: tl)
-    (* SCAN *)
-    | 'N' :: 'A' :: 'C' :: 'S' :: [] -> (SCAN :: buffer)
-    | 'N' :: 'A' :: 'C' :: 'S' :: c :: tl when sep c ->
+    (* scan *)
+    | 'n' :: 'a' :: 'c' :: 's' :: [] -> (SCAN :: buffer)
+    | 'n' :: 'a' :: 'c' :: 's' :: c :: tl when sep c ->
       main_parser (SCAN :: buffer) (c :: tl)
-    (* LEN *)
-    | 'N' :: 'E' :: 'L' :: [] -> (LEN :: buffer)
-    | 'N' :: 'E' :: 'L' :: c :: tl when sep c ->
+    (* len *)
+    | 'n' :: 'e' :: 'l' :: [] -> (LEN :: buffer)
+    | 'n' :: 'e' :: 'l' :: c :: tl when sep c ->
       main_parser (LEN :: buffer) (c :: tl)
-    (* RAND *)
-    | 'D' :: 'N' :: 'A' :: 'R' :: [] -> (RAND :: buffer)
-    | 'D' :: 'N' :: 'A' :: 'R' :: c :: tl when sep c ->
+    (* rand *)
+    | 'd' :: 'n' :: 'a' :: 'r' :: [] -> (RAND :: buffer)
+    | 'd' :: 'n' :: 'a' :: 'r' :: c :: tl when sep c ->
       main_parser (RAND :: buffer) (c :: tl)
-    (* FLOOR *)
-    | 'R' :: 'O' :: 'O' :: 'L' :: 'F' :: [] -> (FLOOR :: buffer)
-    | 'R' :: 'O' :: 'O' :: 'L' :: 'F' :: c :: tl when sep c ->
+    (* floor *)
+    | 'r' :: 'o' :: 'o' :: 'l' :: 'f' :: [] -> (FLOOR :: buffer)
+    | 'r' :: 'o' :: 'o' :: 'l' :: 'f' :: c :: tl when sep c ->
       main_parser (FLOOR :: buffer) (c :: tl)
-    (* CEIL *)
-    | 'L' :: 'I' :: 'E' :: 'C' :: [] -> (CEIL :: buffer)
-    | 'L' :: 'I' :: 'E' :: 'C' :: c :: tl when sep c ->
+    (* ceil *)
+    | 'l' :: 'i' :: 'e' :: 'c' :: [] -> (CEIL :: buffer)
+    | 'l' :: 'i' :: 'e' :: 'c' :: c :: tl when sep c ->
       main_parser (CEIL :: buffer) (c :: tl)
-    (* INCLUDE *)
-    | 'E' :: 'D' :: 'U' :: 'L' :: 'C' :: 'N' :: 'I' :: [] -> (INCLUDE :: buffer)
-    | 'E' :: 'D' :: 'U' :: 'L' :: 'C' :: 'N' :: 'I' :: c :: tl when sep c ->
+    (* include *)
+    | 'e' :: 'd' :: 'u' :: 'l' :: 'c' :: 'n' :: 'i' :: [] -> (INCLUDE :: buffer)
+    | 'e' :: 'd' :: 'u' :: 'l' :: 'c' :: 'n' :: 'i' :: c :: tl when sep c ->
       main_parser (INCLUDE :: buffer) (c :: tl)
-    (* TONUM *)
-    | 'M' :: 'U' :: 'N' :: 'O' :: 'T' :: [] -> (TONUM :: buffer)
-    | 'M' :: 'U' :: 'N' :: 'O' :: 'T' :: c :: tl when sep c ->
+    (* tonum *)
+    | 'm' :: 'u' :: 'n' :: 'o' :: 't' :: [] -> (TONUM :: buffer)
+    | 'm' :: 'u' :: 'n' :: 'o' :: 't' :: c :: tl when sep c ->
       main_parser (TONUM :: buffer) (c :: tl)
-    (* OPENIN *)
-    | 'N' :: 'I' :: 'N' :: 'E' :: 'P' :: 'O' :: [] -> (OPENIN :: buffer)
-    | 'N' :: 'I' :: 'N' :: 'E' :: 'P' :: 'O' :: c :: tl when sep c ->
+    (* openin *)
+    | 'n' :: 'i' :: 'n' :: 'e' :: 'p' :: 'o' :: [] -> (OPENIN :: buffer)
+    | 'n' :: 'i' :: 'n' :: 'e' :: 'p' :: 'o' :: c :: tl when sep c ->
       main_parser (OPENIN :: buffer) (c :: tl)
-    (* OPENOUT *)
-    | 'T' :: 'U' :: 'O' :: 'N' :: 'E' :: 'P' :: 'O' :: [] -> (OPENOUT :: buffer)
-    | 'T' :: 'U' :: 'O' :: 'N' :: 'E' :: 'P' :: 'O' :: c :: tl when sep c ->
+    (* openout *)
+    | 't' :: 'u' :: 'o' :: 'n' :: 'e' :: 'p' :: 'o' :: [] -> (OPENOUT :: buffer)
+    | 't' :: 'u' :: 'o' :: 'n' :: 'e' :: 'p' :: 'o' :: c :: tl when sep c ->
       main_parser (OPENOUT :: buffer) (c :: tl)
-    (* CLOSE *)
-    | 'E' :: 'S' :: 'O' :: 'L' :: 'C' :: [] -> (CLOSE :: buffer)
-    | 'E' :: 'S' :: 'O' :: 'L' :: 'C' :: c :: tl when sep c ->
+    (* close *)
+    | 'e' :: 's' :: 'o' :: 'l' :: 'c' :: [] -> (CLOSE :: buffer)
+    | 'e' :: 's' :: 'o' :: 'l' :: 'c' :: c :: tl when sep c ->
       main_parser (CLOSE :: buffer) (c :: tl)
-    (* READ *)
-    | 'D' :: 'A' :: 'E' :: 'R' :: [] -> (READ :: buffer)
-    | 'D' :: 'A' :: 'E' :: 'R' :: c :: tl when sep c ->
+    (* read *)
+    | 'd' :: 'a' :: 'e' :: 'r' :: [] -> (READ :: buffer)
+    | 'd' :: 'a' :: 'e' :: 'r' :: c :: tl when sep c ->
       main_parser (READ :: buffer) (c :: tl)
-    (* WRITE *)
-    | 'E' :: 'T' :: 'I' :: 'R' :: 'W' :: [] -> (WRITE :: buffer)
-    | 'E' :: 'T' :: 'I' :: 'R' :: 'W' :: c :: tl when sep c ->
+    (* write *)
+    | 'e' :: 't' :: 'i' :: 'r' :: 'w' :: [] -> (WRITE :: buffer)
+    | 'e' :: 't' :: 'i' :: 'r' :: 'w' :: c :: tl when sep c ->
       main_parser (WRITE :: buffer) (c :: tl)
-    (* THROW *)
-    | 'W' :: 'O' :: 'R' :: 'H' :: 'T' :: [] -> (THROW :: buffer)
-    | 'W' :: 'O' :: 'R' :: 'H' :: 'T' :: c :: tl when sep c ->
+    (* throw *)
+    | 'w' :: 'o' :: 'r' :: 'h' :: 't' :: [] -> (THROW :: buffer)
+    | 'w' :: 'o' :: 'r' :: 'h' :: 't' :: c :: tl when sep c ->
       main_parser (THROW :: buffer) (c :: tl)
-    (* CATCH *)
-    | 'H' :: 'C' :: 'T' :: 'A' :: 'C' :: [] -> (CATCH :: buffer)
-    | 'H' :: 'C' :: 'T' :: 'A' :: 'C' :: c :: tl when sep c ->
+    (* catch *)
+    | 'h' :: 'c' :: 't' :: 'a' :: 'c' :: [] -> (CATCH :: buffer)
+    | 'h' :: 'c' :: 't' :: 'a' :: 'c' :: c :: tl when sep c ->
       main_parser (CATCH :: buffer) (c :: tl)
-    (* TOCHAR *)
-    | 'R' :: 'A' :: 'H' :: 'C' :: 'O' :: 'T' :: [] -> (TOCHAR :: buffer)
-    | 'R' :: 'A' :: 'H' :: 'C' :: 'O' :: 'T' :: c :: tl when sep c ->
+    (* tochar *)
+    | 'r' :: 'a' :: 'h' :: 'c' :: 'o' :: 't' :: [] -> (TOCHAR :: buffer)
+    | 'r' :: 'a' :: 'h' :: 'c' :: 'o' :: 't' :: c :: tl when sep c ->
       main_parser (TOCHAR :: buffer) (c :: tl)
-    (* TOSTR *)
-    | 'R' :: 'T' :: 'S' :: 'O' :: 'T' :: [] -> (TOSTR :: buffer)
-    | 'R' :: 'T' :: 'S' :: 'O' :: 'T' :: c :: tl when sep c ->
+    (* tostr *)
+    | 'r' :: 't' :: 's' :: 'o' :: 't' :: [] -> (TOSTR :: buffer)
+    | 'r' :: 't' :: 's' :: 'o' :: 't' :: c :: tl when sep c ->
       main_parser (TOSTR :: buffer) (c :: tl)
     | '\'' :: tl ->
       let tok, stack = char_token tl in
@@ -380,10 +384,13 @@ let tokenizer (stack : char list) = (
     | c :: stack when c >= '0' && c <= '9' ->
       let tok, stack = num_token "" (c :: stack) in
       main_parser (tok :: buffer) stack
-    | c :: stack ->
+    | ('a'..'z' as c) :: stack
+    | ('A'..'Z' as c) :: stack ->
       let tok, stack = name_token "" (c :: stack) in
       main_parser (tok :: buffer) stack
-    | [] ->
+    | _ :: stack ->
+      main_parser (ERROR :: buffer) stack
+    | [] -> 
       buffer
   ) in
   main_parser [] stack
@@ -612,26 +619,26 @@ let interpreter (tokens : token list) = (
           match stack with
           | NAME n :: NAME t :: stack -> (
             match t with
-            | "INT" ->
+            | "int" ->
               let v = read_int () in
               eval_rpn input ((n, INT v) :: (List.remove_assoc n vars)) stack
-            | "STR" ->
+            | "str" ->
               let v = read_line () in
               eval_rpn input ((n, STR v) :: (List.remove_assoc n vars)) stack
-            | "FLOAT" ->
+            | "float" ->
               let v = Scanf.scanf "%f" (fun v -> v) in
               eval_rpn input ((n, FLOAT v) :: (List.remove_assoc n vars)) stack
             | _ -> raise (InvalidToken (NAME t, "at SCAN"))
           )
           | INT i :: ARRAY a :: NAME t :: stack -> (
             match t with
-            | "INT" ->
+            | "int" ->
               let v = read_int () in
               a.(i) <- INT v; eval_rpn input vars stack
-            | "STR" ->
+            | "str" ->
               let v = read_line () in
               a.(i) <- STR v; eval_rpn input vars stack
-            | "FLOAT" ->
+            | "float" ->
               let v = Scanf.scanf "%f" (fun v -> v) in
               a.(i) <- FLOAT v; eval_rpn input vars stack
             | _ -> raise (InvalidToken (NAME t, "at SCAN"))
@@ -778,9 +785,9 @@ let interpreter (tokens : token list) = (
             print_float a; eval_rpn input vars stack
           | BOOL a :: stack ->
             if a then
-              print_string "TRUE"
+              print_string "true"
             else
-              print_string "FALSE";
+              print_string "false";
             eval_rpn input vars stack
           | CHAR a :: stack ->
             print_char a; eval_rpn input vars stack
@@ -799,9 +806,9 @@ let interpreter (tokens : token list) = (
             eval_rpn input vars stack
           | BOOL a :: stack ->
             if a then
-              print_endline "TRUE"
+              print_endline "true"
             else
-              print_endline "FALSE";
+              print_endline "false";
             eval_rpn input vars stack
           | CHAR a :: stack ->
             print_char a; print_newline ();
@@ -1152,12 +1159,12 @@ let interpreter (tokens : token list) = (
           match stack with
           | INCHAN c :: NAME t :: stack -> (
             match t with
-            | "STR" -> (
+            | "str" -> (
               match input_line c with
               | s -> (eval_rpn [@tailcall]) input vars (STR s :: stack)
               | exception e -> (eval_rpn [@tailcall]) input vars (ERROR :: stack)
             )
-            | "CHAR" -> (
+            | "char" -> (
               match input_char c with
               | c -> (eval_rpn [@tailcall]) input vars (CHAR c :: stack)
               | exception e -> (eval_rpn [@tailcall]) input vars (ERROR :: stack)
@@ -1189,6 +1196,8 @@ let interpreter (tokens : token list) = (
             eval_rpn input vars (CHAR (Char.chr i) :: stack)
           | STR s :: stack ->
             eval_rpn input vars (CHAR (s.[0]) :: stack)
+          | CHAR _ :: _ ->
+            eval_rpn input vars stack
           | stack -> raise (InvalidToken (LIST stack, "at TOCHAR"))
         )
         | TOSTR -> (
@@ -1203,7 +1212,7 @@ let interpreter (tokens : token list) = (
           | STR _ :: _ ->
             eval_rpn input vars stack
           | BOOL b :: stack ->
-            let s = if b then "TRUE" else "FALSE" in
+            let s = if b then "true" else "false" in
             eval_rpn input vars (STR s :: stack)
           | stack -> raise (InvalidToken (LIST stack, "at TOSTR"))
         )
@@ -1308,6 +1317,7 @@ let () = (
         exit 0
       ) in
     let tokens = file |> char_stack |> tokenizer in
+    (* print_endline (string_of_token (LIST tokens)); *)
     match interpreter tokens with
     | exception InvalidToken (tok, s) ->
       Printf.fprintf stderr "Encountered an exception InvalidToken %s!\nToken: %s\n" s (string_of_token tok); close_in file
