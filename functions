@@ -1,8 +1,0 @@
-FUN GREET GREETING NAME
-    PRINT GREETING
-    PRINT NAME
-    PRINTLN " Nice to see you!"
-    RETURN 1
-ENDFUN
-
-GREET "Hello " "John"
